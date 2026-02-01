@@ -1,0 +1,52 @@
+<mat-sidenav-container class="sidenav-container">
+  <mat-sidenav #sidenav class="sidenav" mode="side" opened="true">
+    <div class="sidenav-content">
+      <ng-container *ngFor="let item of menuItems">
+        <!-- Elemento principal -->
+        <ng-container *ngIf="!item.expandable">
+          <!-- Enlace directo -->
+          <button mat-button [routerLink]="item.route" class="menu-item-button">
+            <mat-icon class="menu-icon">{{ item.icon }}</mat-icon>
+            <span class="menu-label">{{ item.label }}</span>
+            <span class="spacer"></span>
+          </button>
+        </ng-container>
+
+        <!-- Item expandible -->
+        <ng-container *ngIf="item.expandable">
+          <button
+            mat-button
+            class="menu-item-button expandable-button"
+            (click)="toggleExpand(item)"
+            [class.expanded]="item.expanded"
+          >
+            <mat-icon class="menu-icon">{{ item.icon }}</mat-icon>
+            <span class="menu-label">{{ item.label }}</span>
+            <span class="spacer"></span>
+            <mat-icon class="expand-icon" [class.rotated]="item.expanded">
+              expand_more
+            </mat-icon>
+          </button>
+
+          <!-- Subitems -->
+          <div class="submenu" *ngIf="item.expanded && item.children">
+            <button
+            mat-button
+              *ngFor="let child of item.children"
+              [routerLink]="child.route"
+              class="menu-item-button submenu-item"
+            >
+              <mat-icon class="menu-icon">{{ child.icon }}</mat-icon>
+              <span class="menu-label">{{ child.label }}</span>
+              <span class="spacer"></span>
+          </button>
+          </div>
+        </ng-container>
+      </ng-container>
+    </div>
+  </mat-sidenav>
+
+  <mat-sidenav-content class="content">
+    <router-outlet></router-outlet>
+  </mat-sidenav-content>
+</mat-sidenav-container>

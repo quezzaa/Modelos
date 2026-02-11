@@ -6,12 +6,12 @@ export const routes: Routes = [
     path: 'discretos/binominal',
     loadComponent: () =>
       import('./Discretos/binominal/binominal')
-        .then(m => m.Binominal)
+        .then(b => b.Binominal)
   },
   {
     path: 'inicio',
     loadComponent: () =>
       import('./Bars/inicio/inicio')
-        .then(m => m.Inicio)
+        .then(i => i.Inicio)
   }
 ];

@@ -98,3 +98,7 @@
   padding-bottom: 70px;
   background-color: var(--mat-sys-surface);
 }
+
+mat-sidenav-container,span{
+  font-family: 'Roboto', sans-serif!important;
+}

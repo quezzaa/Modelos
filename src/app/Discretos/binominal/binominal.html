@@ -1,9 +1,14 @@
 <mat-card>
   <mat-card-title>Distribución Binominal</mat-card-title>
-
+<br>
   <mat-card-content class="form">
     <mat-form-field appearance="outline">
-      <mat-label>n (ensayos)</mat-label>
+      <mat-label>N (población)</mat-label>
+      <input matInput type="number" [(ngModel)]="N">
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>n (muestra)</mat-label>
       <input matInput type="number" [(ngModel)]="n">
     </mat-form-field>
 
@@ -20,8 +25,36 @@
 <br>
 
 <mat-card>
-  <mat-card-title>Resultados</mat-card-title>
+  <mat-card-title>Estadísticos</mat-card-title>
+  <p>
+    <strong>Tipo de población:</strong>
+    {{ poblacionInfinita ? 'Infinita' : 'Finita' }}
+  </p>
+  <p><strong>Media (μ): </strong> {{ media | number:'1.2-2' }}</p>
+  <p><strong>Desviación estándar (σ):</strong></p>
+  <ul>
+    <li><strong>Desviación infinita: </strong> {{ desviacion | number:'1.4-4' }}</li>
+    <li *ngIf="!poblacionInfinita"><strong>Desviación finita (σ corregida):</strong> {{ desviacionFinita | number:'1.4-4' }}</li>
+  </ul>
 
+  <p *ngIf="!poblacionInfinita">
+    <strong>Factor de Corrección:</strong> {{ factorCorreccion | number:'1.4-4' }}
+  </p>
+
+  <p>
+    <strong>Sesgo: </strong> {{ sesgo | number:'1.4-4' }}<br>
+    <strong>{{ interpretacionSesgo }}</strong> 
+  </p>
+
+  <p>
+    <strong>Curtosis: </strong> {{ curtosis | number:'1.4-4' }}<br>
+    <strong>{{ interpretacionCurtosis }}</strong> 
+  </p>
+</mat-card>
+<br>
+<mat-card>
+  <mat-card-title>Resultados</mat-card-title>
+  <br>
   <table mat-table [dataSource]="dataSource" class="mat-elevation-z2">
 
     <ng-container matColumnDef="k">
@@ -64,11 +97,6 @@
   <br>
 </mat-card>
 <br>
-<mat-card *ngIf="poblacionInfinita">
-  <mat-card-title>Estadísticos</mat-card-title>
-  <p><strong>Media (μ):</strong> {{ media | number:'1.2-2' }}</p>
-  <p><strong>Desviación estándar (σ):</strong> {{ desviacion | number:'1.2-2' }}</p>
-</mat-card>
 <br>
 <mat-card *ngIf="dataSource.length">
   <mat-card-title>Gráfica p%</mat-card-title>
@@ -91,4 +119,5 @@
   type="line">
 </canvas>
 </mat-card>
+<br>
 <br>

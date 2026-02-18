@@ -39,6 +39,7 @@ export class Binominal {
   N = 0;
   n = 0;
   p = 0;
+  xRango = ''; // Puede ser: "5", "0-3", ">3", "<5", ">=2"
 
   // Estadísticos
   poblacionInfinita = true;
@@ -52,6 +53,10 @@ export class Binominal {
 
   curtosis = 0;
   interpretacionCurtosis = '';
+
+  // Mensaje de validación para x
+  xValido = true;
+  xMensaje = '';
 
   dataSource: BinominalRow[] = [];
 
@@ -76,14 +81,17 @@ export class Binominal {
 
   barChartOptions: ChartConfiguration<'bar'>['options'] = {
     responsive: true,
+    backgroundColor: 'rgba(75,192,192,0.4)',
     scales: {
       y: {
         title: {
           display: true,
-          text: 'Porcentaje (%)'
+          text: 'Porcentaje (%)',
+          font: {
+            'size': 20,
+            'weight': 'bold',
+          }
         },
-        min: 0,
-        max: 100
       }
     }
   };
@@ -95,44 +103,103 @@ export class Binominal {
       {
         data: [],
         label: 'P(x) % acumulada',
-        fill: false
+        fill: true,
       }
     ]
   };
 
   lineChartOptions: ChartConfiguration<'line'>['options'] = {
     responsive: true,
+    backgroundColor: 'rgba(75,192,192,0.4)',
     scales: {
       y: {
         title: {
           display: true,
-          text: 'Porcentaje acumulado (%)'
+          text: 'Porcentaje acumulado (%)',
+          font: {
+            'size': 20,
+            'weight': 'bold',
+          }
+
         },
-        min: 0,
-        max: 100
-      }
+      },
     }
   };
 
   calcular() {
+    // Validar inputs básicos
+    if (this.n <= 0) {
+      alert('n (muestra) debe ser mayor a 0');
+      return;
+    }
 
     if (this.p < 0 || this.p > 1) {
       alert('p debe estar entre 0 y 1');
       return;
     }
 
-    this.poblacionInfinita = this.N <= 0;
+    if (!this.xRango.trim()) {
+      alert('x (valor o rango) es requerido');
+      return;
+    }
 
-    if (!this.poblacionInfinita) {
-      const nMax = this.N * 0.05;
-      if (this.n > nMax) {
-        alert(`Para población finita, n debe ser ≤ ${nMax}`);
+    // Parse y validar x
+    const valoresX = this.parseXRango();
+    if (!this.xValido) {
+      alert(this.xMensaje);
+      return;
+    }
+
+    // ---------- Determinar si es población infinita o finita ----------
+    if (this.N <= 0) {
+      this.poblacionInfinita = true;
+    } else {
+      const porcentajeMuestra = (this.n / this.N) * 100;
+      // Infinita: < 5%
+      // Finita: >= 5% y < 20%
+      // Error: >= 20%
+      if (porcentajeMuestra < 5) {
+        this.poblacionInfinita = true;
+      } else if (porcentajeMuestra < 20) {
+        this.poblacionInfinita = false;
+      } else {
+        alert(`n/N = ${porcentajeMuestra.toFixed(2)}%. Para población finita, n debe ser < 20% de N`);
         return;
       }
     }
 
     this.dataSource = [];
-    let acumulada = 0;
+    let acumuladaTotal = 0;
+
+    // Calcular distribución para todos los valores 0 a n
+    const distribucionCompleta: BinominalRow[] = [];
+    for (let x = 0; x <= this.n; x++) {
+      const px = this.binomial(this.n, x, this.p);
+      acumuladaTotal += px;
+      distribucionCompleta.push({
+        k: x,
+        binominal: px,
+        acumulada: acumuladaTotal,
+        porcentaje: px * 100,
+        porcentajeAcumulado: acumuladaTotal * 100
+      });
+    }
+
+    // Filtrar solo los valores de x solicitados
+    this.dataSource = distribucionCompleta.filter(row => valoresX.includes(row.k));
+
+    if (this.dataSource.length === 0) {
+      alert('El rango de x especificado no generó resultados');
+      return;
+    }
+
+    // Recalcular acumulada según el rango filtrado
+    let acumuladaFiltrada = 0;
+    for (let row of this.dataSource) {
+      acumuladaFiltrada += row.binominal;
+      row.acumulada = acumuladaFiltrada;
+      row.porcentajeAcumulado = acumuladaFiltrada * 100;
+    }
 
     // ---------- Media ----------
     this.media = this.n * this.p;
@@ -141,13 +208,13 @@ export class Binominal {
     const varianzaInfinita = this.n * this.p * (1 - this.p);
     this.desviacion = Math.sqrt(varianzaInfinita);
 
-    // ---------- Factor corrección ----------
+    // ---------- Factor corrección (solo para población finita) ----------
+    this.factorCorreccion = 1;
+    this.desviacionFinita = this.desviacion;
+
     if (!this.poblacionInfinita && this.N > 1) {
       this.factorCorreccion = Math.sqrt((this.N - this.n) / (this.N - 1));
       this.desviacionFinita = this.desviacion * this.factorCorreccion;
-    } else {
-      this.factorCorreccion = 1;
-      this.desviacionFinita = this.desviacion;
     }
 
     // ---------- Varianza real usada ----------
@@ -160,7 +227,6 @@ export class Binominal {
       this.sesgo = 0;
       this.curtosis = 0;
     } else {
-
       const sigmaReal = Math.sqrt(varianzaReal);
 
       // Sesgo
@@ -190,23 +256,85 @@ export class Binominal {
       this.interpretacionCurtosis = 'Platicúrtica (Más aplanada)';
     }
 
-    // ---------- Distribución ----------
-    for (let x = 0; x <= this.n; x++) {
-      const px = this.binomial(this.n, x, this.p);
-      acumulada += px;
-
-      this.dataSource.push({
-        k: x,
-        binominal: px,
-        acumulada,
-        porcentaje: px * 100,
-        porcentajeAcumulado: acumulada * 100
-      });
-    }
-    if (this.dataSource.length > 0) {
-      this.dataSource[this.dataSource.length - 1].porcentajeAcumulado = 100;
-    }
     this.actualizarGraficas();
+  }
+
+  private parseXRango(): number[] {
+    this.xValido = true;
+    this.xMensaje = '';
+
+    const x = this.xRango.trim();
+    const valores: number[] = [];
+
+    // Caso: "5" (valor único)
+    if (/^=?\d+$/.test(x)) {
+      const val = parseInt(x.replace('=', ''));
+      if (val < 0 || val > this.n) {
+        this.xValido = false;
+        this.xMensaje = `x debe estar entre 0 y ${this.n}`;
+        return [];
+      }
+      return [val];
+    }
+
+    // Caso: "0-3" (rango)
+    if (/^\d+-\d+$/.test(x)) {
+      const [inicio, fin] = x.split('-').map(Number);
+      if (inicio > fin) {
+        this.xValido = false;
+        this.xMensaje = 'Rango inválido: inicio debe ser menor que fin';
+        return [];
+      }
+      if (fin > this.n) {
+        this.xValido = false;
+        this.xMensaje = `El rango no puede exceder n=${this.n}`;
+        return [];
+      }
+      for (let i = inicio; i <= fin; i++) {
+        valores.push(i);
+      }
+      return valores;
+    }
+
+    // Caso: ">3" (mayor que)
+    if (/^>\d+$/.test(x)) {
+      const val = parseInt(x.substring(1));
+      for (let i = val + 1; i <= this.n; i++) {
+        valores.push(i);
+      }
+      return valores;
+    }
+
+    // Caso: ">=3" (mayor o igual que)
+    if (/^>=\d+$/.test(x)) {
+      const val = parseInt(x.substring(2));
+      for (let i = val; i <= this.n; i++) {
+        valores.push(i);
+      }
+      return valores;
+    }
+
+    // Caso: "<3" (menor que)
+    if (/^<\d+$/.test(x)) {
+      const val = parseInt(x.substring(1));
+      for (let i = 0; i < val; i++) {
+        valores.push(i);
+      }
+      return valores;
+    }
+
+    // Caso: "<=3" (menor o igual que)
+    if (/^<=\d+$/.test(x)) {
+      const val = parseInt(x.substring(2));
+      for (let i = 0; i <= val; i++) {
+        valores.push(i);
+      }
+      return valores;
+    }
+
+    this.xValido = false;
+    this.xMensaje = 'Formato de x inválido. Use: "5", "0-3", ">3", ">=3", "<5" o "<=5"';
+    return [];
   }
 
   private actualizarGraficas() {
@@ -232,7 +360,9 @@ export class Binominal {
         {
           data: porcentajesAcumulados,
           label: 'P(x) % acumulada',
-          fill: false
+          fill: false,
+          pointRadius: 10,
+          pointHoverRadius: 14
         }
       ]
     };

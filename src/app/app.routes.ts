@@ -13,5 +13,11 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./Bars/inicio/inicio')
         .then(i => i.Inicio)
+  },
+  {
+    path: 'lectura/archivos',
+    loadComponent: () =>
+      import('./Lectura/archivos/archivos')
+        .then(a => a.Archivos)
   }
 ];

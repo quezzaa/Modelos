@@ -55,6 +55,15 @@ export class SideBar {
         { label: 'Binominal', icon: 'model_training', route: '/discretos/binominal' },
       ]
     },
+    {
+      label: 'Lectura',
+      icon: 'book',
+      expandable: true,
+      expanded: false,
+      children: [
+        { label: 'Leer Archivo', icon: 'chrome_reader_mode', route: '/lectura/archivos' },
+      ]
+    }
   ];
 
   toggleExpand(item: MenuItem): void {

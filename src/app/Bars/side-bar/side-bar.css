@@ -1,12 +1,14 @@
 .sidenav-container {
   height: 100%;
   display: flex;
+  background-color: #F4F8F9;
 }
 
 .sidenav {
   width: 200px;
   background-color: var(--mat-sys-surface);
   font-family: 'Roboto', sans-serif;
+  background-color: #F4F8F9;
 }
 
 .sidenav-content {
@@ -96,7 +98,7 @@
   flex: 1;
   padding: 20px;
   padding-bottom: 70px;
-  background-color: var(--mat-sys-surface);
+  background-color: #2D3E50;
 }
 
 mat-sidenav-container,span{

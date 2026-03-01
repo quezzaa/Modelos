@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, signal, inject, OnInit, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -6,14 +6,17 @@ import { MatCardModule } from '@angular/material/card';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTableModule } from '@angular/material/table';
+import { MatRadioModule } from '@angular/material/radio';
+import { MatSelectModule } from '@angular/material/select';
 
 import { BaseChartDirective } from 'ng2-charts';
 import { ChartConfiguration } from 'chart.js';
 import 'chart.js/auto';
+import { FileDataService } from '../../Services/file-data.service';
 
-interface BinominalRow {
-  k: number;
-  binominal: number;
+interface DistributionRow {
+  x: number;
+  probabilidad: number;
   acumulada: number;
   porcentaje: number;
   porcentajeAcumulado: number;
@@ -29,20 +32,74 @@ interface BinominalRow {
     MatInputModule,
     MatButtonModule,
     MatTableModule,
+    MatRadioModule,
+    MatSelectModule,
     BaseChartDirective
   ],
   templateUrl: './binominal.html',
   styleUrl: './binominal.css'
 })
-export class Binominal {
+export class Binominal implements OnInit {
+  private fileDataService = inject(FileDataService);
 
+  // Tipo de distribución
+  tipoDistribucion: 'binomial' | 'hipergeometrica' = 'binomial';
+  usarProbabilidad = signal(true); // true: usa p, false: usa k
+  dataFromFile = signal(false);
+  selectedKState = signal<string>('');
+
+  // Aceptación por lotes
+  usarAceptacionPorLotes = signal(false);
+  porcentajeAceptacion = 0;
+  filaAceptacion: DistributionRow | null = null; // Referencia a la fila aceptada
+
+  // Parámetros
   N = 0;
   n = 0;
   p = 0;
+  k = 0; // Éxitos en la población (hipergeométrica)
   xRango = ''; // Puede ser: "5", "0-3", ">3", "<5", ">=2"
+
+  constructor() {
+    // Efecto para monitorear cambios en los datos del servicio
+    effect(() => {
+      const fileData = this.fileDataService.getFileData();
+      if (fileData) {
+        this.N = fileData.N;
+        this.k = fileData.K;
+        this.p = fileData.p || (fileData.K / fileData.N);
+        this.selectedKState.set(fileData.selectedKState || 'archivo');
+        
+        // Determinar el tipo de distribución inicial
+        if (fileData.distributionType === 'binomial') {
+          this.tipoDistribucion = 'binomial';
+          this.usarProbabilidad.set(true);
+          console.log('Binomial - p:', this.p, 'K:', this.k);
+        } else {
+          this.tipoDistribucion = 'hipergeometrica';
+          this.usarProbabilidad.set(false);
+          console.log('Hipergeométrica - K:', this.k, 'p:', this.p);
+        }
+        
+        this.dataFromFile.set(true);
+        console.log('Datos cargados del archivo:', { 
+          N: this.N, 
+          K: this.k, 
+          p: this.p,
+          distributionType: fileData.distributionType,
+          selectedKState: this.selectedKState()
+        });
+      }
+    });
+  }
+
+  ngOnInit(): void {
+    // Inicialización si es necesaria
+  }
 
   // Estadísticos
   poblacionInfinita = true;
+  tipoCalculoActual = ''; // 'infinita', 'finita', 'hipergeometrica'
   media = 0;
   desviacion = 0;
   desviacionFinita = 0;
@@ -58,11 +115,11 @@ export class Binominal {
   xValido = true;
   xMensaje = '';
 
-  dataSource: BinominalRow[] = [];
+  dataSource: DistributionRow[] = [];
 
   displayedColumns = [
-    'k',
-    'binominal',
+    'x',
+    'probabilidad',
     'acumulada',
     'porcentaje',
     'porcentajeAcumulado'
@@ -127,19 +184,81 @@ export class Binominal {
   };
 
   calcular() {
-    // Validar inputs básicos
-    if (this.n <= 0) {
-      alert('n (muestra) debe ser mayor a 0');
+    // Validaciones iniciales
+    if (this.N <= 0) {
+      alert('N (población) debe ser mayor a 0');
       return;
     }
 
-    if (this.p < 0 || this.p > 1) {
-      alert('p debe estar entre 0 y 1');
+    if (this.n <= 0 || this.n > this.N) {
+      alert(`n (muestra) debe estar entre 1 y ${this.N}`);
       return;
     }
 
     if (!this.xRango.trim()) {
       alert('x (valor o rango) es requerido');
+      return;
+    }
+
+    const porcentajeMuestra = (this.n / this.N) * 100;
+
+    // Si está en binomial pero n/N >= 20%, sugerir cambiar a hipergeométrica
+    if (this.usarProbabilidad() && porcentajeMuestra >= 20) {
+      const cambio = confirm(
+        `⚠ n/N = ${porcentajeMuestra.toFixed(2)}% >= 20%\n\n` +
+        `Para esta relación se recomienda usar Hipergeométrica.\n\n` +
+        `¿Desea cambiar a Hipergeométrica?`
+      );
+      if (cambio) {
+        this.usarProbabilidad.set(false);
+        this.tipoDistribucion = 'hipergeometrica';
+        // El k ya está cargado del archivo, solo cambiamos el tipo
+      } else {
+        alert('Continuando con Binomial. Tenga en cuenta que la aproximación puede no ser óptima.');
+      }
+    }
+
+    // Si está en hipergeométrica pero n/N < 20%, sugerir cambiar a binomial
+    if (!this.usarProbabilidad() && porcentajeMuestra < 20) {
+      const cambio = confirm(
+        `⚠ n/N = ${porcentajeMuestra.toFixed(2)}% < 20%\n\n` +
+        `Para esta relación se recomienda usar Binomial.\n\n` +
+        `¿Desea cambiar a Binomial?`
+      );
+      if (cambio) {
+        this.usarProbabilidad.set(true);
+        this.tipoDistribucion = 'binomial';
+        // El p ya está cargado del archivo, solo cambiamos el tipo
+      } else {
+        alert('Continuando con Hipergeométrica.');
+      }
+    }
+
+    // Si el usuario elige usar probabilidad (p), usa Binomial
+    // Si elige usar éxitos (k), usa Hipergeométrica
+    if (this.usarProbabilidad()) {
+      // Determinar si es infinita o finita basado en n/N
+      if (porcentajeMuestra < 5) {
+        this.tipoCalculoActual = 'infinita';
+      } else if (porcentajeMuestra <= 20) {
+        this.tipoCalculoActual = 'finita';
+      } else {
+        // Si ya preguntamos y el usuario quiso continuar, permitir
+        if (porcentajeMuestra >= 20) {
+          alert(`Para n/N = ${porcentajeMuestra.toFixed(2)}% (> 20%), la aproximación binomial puede no ser precisa.`);
+        }
+      }
+      this.calcularBinomial();
+    } else {
+      this.tipoCalculoActual = 'hipergeometrica';
+      this.calcularHipergeometrica();
+    }
+  }
+
+  private calcularBinomial() {
+    // Validar inputs
+    if (this.p < 0 || this.p > 1) {
+      alert('p debe estar entre 0 y 1');
       return;
     }
 
@@ -150,35 +269,19 @@ export class Binominal {
       return;
     }
 
-    // ---------- Determinar si es población infinita o finita ----------
-    if (this.N <= 0) {
-      this.poblacionInfinita = true;
-    } else {
-      const porcentajeMuestra = (this.n / this.N) * 100;
-      // Infinita: < 5%
-      // Finita: >= 5% y < 20%
-      // Error: >= 20%
-      if (porcentajeMuestra < 5) {
-        this.poblacionInfinita = true;
-      } else if (porcentajeMuestra < 20) {
-        this.poblacionInfinita = false;
-      } else {
-        alert(`n/N = ${porcentajeMuestra.toFixed(2)}%. Para población finita, n debe ser < 20% de N`);
-        return;
-      }
-    }
+    this.poblacionInfinita = this.tipoCalculoActual === 'infinita';
 
     this.dataSource = [];
     let acumuladaTotal = 0;
 
     // Calcular distribución para todos los valores 0 a n
-    const distribucionCompleta: BinominalRow[] = [];
+    const distribucionCompleta: DistributionRow[] = [];
     for (let x = 0; x <= this.n; x++) {
       const px = this.binomial(this.n, x, this.p);
       acumuladaTotal += px;
       distribucionCompleta.push({
-        k: x,
-        binominal: px,
+        x: x,
+        probabilidad: px,
         acumulada: acumuladaTotal,
         porcentaje: px * 100,
         porcentajeAcumulado: acumuladaTotal * 100
@@ -186,7 +289,7 @@ export class Binominal {
     }
 
     // Filtrar solo los valores de x solicitados
-    this.dataSource = distribucionCompleta.filter(row => valoresX.includes(row.k));
+    this.dataSource = distribucionCompleta.filter(row => valoresX.includes(row.x));
 
     if (this.dataSource.length === 0) {
       alert('El rango de x especificado no generó resultados');
@@ -196,47 +299,150 @@ export class Binominal {
     // Recalcular acumulada según el rango filtrado
     let acumuladaFiltrada = 0;
     for (let row of this.dataSource) {
-      acumuladaFiltrada += row.binominal;
+      acumuladaFiltrada += row.probabilidad;
       row.acumulada = acumuladaFiltrada;
       row.porcentajeAcumulado = acumuladaFiltrada * 100;
     }
 
-    // ---------- Media ----------
+    // Calcular estadísticos
+    this.calcularEstadisticosBinomial();
+    this.actualizarGraficas();
+  }
+
+  private calcularHipergeometrica() {
+    // Validar inputs específicos para hipergeométrica
+    if (this.k < 0 || this.k > this.N) {
+      alert(`k (éxitos en población) debe estar entre 0 y ${this.N}`);
+      return;
+    }
+
+    // Parse y validar x
+    const valoresX = this.parseXRango();
+    if (!this.xValido) {
+      alert(this.xMensaje);
+      return;
+    }
+
+    this.poblacionInfinita = false;
+
+    // El rango de x válido para hipergeométrica es: max(0, n+k-N) <= x <= min(n, k)
+    const xMin = Math.max(0, this.n + this.k - this.N);
+    const xMax = Math.min(this.n, this.k);
+
+    this.dataSource = [];
+    let acumuladaTotal = 0;
+
+    // Calcular distribución hipergeométrica
+    const distribucionCompleta: DistributionRow[] = [];
+    for (let x = xMin; x <= xMax; x++) {
+      const px = this.hipergeometrica(this.N, this.k, this.n, x);
+      acumuladaTotal += px;
+      distribucionCompleta.push({
+        x: x,
+        probabilidad: px,
+        acumulada: acumuladaTotal,
+        porcentaje: px * 100,
+        porcentajeAcumulado: acumuladaTotal * 100
+      });
+    }
+
+    // Filtrar solo los valores de x solicitados
+    this.dataSource = distribucionCompleta.filter(row => valoresX.includes(row.x));
+
+    if (this.dataSource.length === 0) {
+      alert('El rango de x especificado no generó resultados');
+      return;
+    }
+
+    // Recalcular acumulada según el rango filtrado
+    let acumuladaFiltrada = 0;
+    for (let row of this.dataSource) {
+      acumuladaFiltrada += row.probabilidad;
+      row.acumulada = acumuladaFiltrada;
+      row.porcentajeAcumulado = acumuladaFiltrada * 100;
+    }
+
+    // Calcular estadísticos
+    this.calcularEstadisticosHipergeometrica();
+    this.actualizarGraficas();
+  }
+
+  private calcularEstadisticosBinomial() {
+    // Media
     this.media = this.n * this.p;
 
-    // ---------- Varianza infinita ----------
+    // Varianza infinita
     const varianzaInfinita = this.n * this.p * (1 - this.p);
     this.desviacion = Math.sqrt(varianzaInfinita);
 
-    // ---------- Factor corrección (solo para población finita) ----------
+    // Factor corrección (solo para población finita)
     this.factorCorreccion = 1;
     this.desviacionFinita = this.desviacion;
 
-    if (!this.poblacionInfinita && this.N > 1) {
+    if (this.tipoCalculoActual === 'finita' && this.N > 1) {
       this.factorCorreccion = Math.sqrt((this.N - this.n) / (this.N - 1));
       this.desviacionFinita = this.desviacion * this.factorCorreccion;
     }
 
-    // ---------- Varianza real usada ----------
-    const varianzaReal = this.poblacionInfinita
+    const varianzaReal = this.tipoCalculoActual === 'infinita'
       ? varianzaInfinita
       : varianzaInfinita * (this.factorCorreccion ** 2);
 
-    // ---------- Sesgo y Curtosis ----------
+    // Sesgo y Curtosis
     if (varianzaReal === 0) {
       this.sesgo = 0;
       this.curtosis = 0;
     } else {
       const sigmaReal = Math.sqrt(varianzaReal);
-
-      // Sesgo
       this.sesgo = (1 - 2 * this.p) / sigmaReal;
-
-      // Curtosis (exceso)
       this.curtosis = (1 - 6 * this.p * (1 - this.p)) / varianzaReal;
     }
 
-    // ---------- Interpretación Sesgo ----------
+    this.interpretarSesgo();
+    this.interpretarCurtosis();
+  }
+
+  private calcularEstadisticosHipergeometrica() {
+    // Media: μ = n * k / N
+    this.media = (this.n * this.k) / this.N;
+
+    // Probabilidad de éxito en hipergeométrica: p = k / N
+    const pHiper = this.k / this.N;
+    const qHiper = 1 - pHiper;
+
+    // Varianza: σ² = n * p * q * (N - n) / (N - 1)
+    const varianza = (this.n * pHiper * qHiper * (this.N - this.n)) / (this.N - 1);
+    this.desviacion = Math.sqrt(varianza);
+
+    // Para hipergeométrica, no hay "factor de corrección" separado, ya está en la fórmula
+    this.desviacionFinita = this.desviacion;
+    this.factorCorreccion = 1;
+
+    // Sesgo
+    if (this.desviacion === 0) {
+      this.sesgo = 0;
+      this.curtosis = 0;
+    } else {
+      // Sesgo: (Q - P) * (N - 2n) / ((N - 2) * σ)
+      this.sesgo = ((qHiper - pHiper) * (this.N - 2 * this.n)) / ((this.N - 2) * this.desviacion);
+
+      // Curtosis: [(N² * (N-1) * (1 + 6*n*(N-n) - 6*n*p*q) - 6*n*(N-n)*(N-n)*(N-1)) / (n*p*q*(N-2)*(N-3)*(N-n))]
+      const numerador = Math.pow(this.N, 2) * (this.N - 1) * (1 + 6 * this.n * (this.N - this.n) - 6 * this.n * pHiper * qHiper);
+      const segundoTermino = 6 * this.n * (this.N - this.n) * (this.N - this.n) * (this.N - 1);
+      const denominador = this.n * pHiper * qHiper * (this.N - 2) * (this.N - 3) * (this.N - this.n);
+
+      if (denominador === 0) {
+        this.curtosis = 0;
+      } else {
+        this.curtosis = (numerador - segundoTermino) / denominador;
+      }
+    }
+
+    this.interpretarSesgo();
+    this.interpretarCurtosis();
+  }
+
+  private interpretarSesgo() {
     this.sesgo = +this.sesgo.toFixed(2);
     if (this.sesgo === 0.00) {
       this.interpretacionSesgo = 'Neutro (Simétrica)';
@@ -245,8 +451,9 @@ export class Binominal {
     } else {
       this.interpretacionSesgo = 'Negativo (Asimetría hacia la izquierda)';
     }
+  }
 
-    // ---------- Interpretación Curtosis ----------
+  private interpretarCurtosis() {
     this.curtosis = +this.curtosis.toFixed(2);
     if (this.curtosis === 0.00) {
       this.interpretacionCurtosis = 'Mesocúrtica (Campana de Gauss)';
@@ -255,8 +462,6 @@ export class Binominal {
     } else {
       this.interpretacionCurtosis = 'Platicúrtica (Más aplanada)';
     }
-
-    this.actualizarGraficas();
   }
 
   private parseXRango(): number[] {
@@ -266,12 +471,17 @@ export class Binominal {
     const x = this.xRango.trim();
     const valores: number[] = [];
 
+    let maxX = this.n;
+    if (this.tipoCalculoActual === 'hipergeometrica') {
+      maxX = Math.min(this.n, this.k);
+    }
+
     // Caso: "5" (valor único)
     if (/^=?\d+$/.test(x)) {
       const val = parseInt(x.replace('=', ''));
-      if (val < 0 || val > this.n) {
+      if (val < 0 || val > maxX) {
         this.xValido = false;
-        this.xMensaje = `x debe estar entre 0 y ${this.n}`;
+        this.xMensaje = `x debe estar entre 0 y ${maxX}`;
         return [];
       }
       return [val];
@@ -285,9 +495,9 @@ export class Binominal {
         this.xMensaje = 'Rango inválido: inicio debe ser menor que fin';
         return [];
       }
-      if (fin > this.n) {
+      if (fin > maxX) {
         this.xValido = false;
-        this.xMensaje = `El rango no puede exceder n=${this.n}`;
+        this.xMensaje = `El rango no puede exceder ${maxX}`;
         return [];
       }
       for (let i = inicio; i <= fin; i++) {
@@ -299,7 +509,7 @@ export class Binominal {
     // Caso: ">3" (mayor que)
     if (/^>\d+$/.test(x)) {
       const val = parseInt(x.substring(1));
-      for (let i = val + 1; i <= this.n; i++) {
+      for (let i = val + 1; i <= maxX; i++) {
         valores.push(i);
       }
       return valores;
@@ -308,7 +518,7 @@ export class Binominal {
     // Caso: ">=3" (mayor o igual que)
     if (/^>=\d+$/.test(x)) {
       const val = parseInt(x.substring(2));
-      for (let i = val; i <= this.n; i++) {
+      for (let i = val; i <= maxX; i++) {
         valores.push(i);
       }
       return valores;
@@ -339,7 +549,7 @@ export class Binominal {
 
   private actualizarGraficas() {
 
-    const labels = this.dataSource.map(d => `x=${d.k}`);
+    const labels = this.dataSource.map(d => `x=${d.x}`);
 
     const porcentajes = this.dataSource.map(d => +d.porcentaje.toFixed(4));
     const porcentajesAcumulados = this.dataSource.map(d => +d.porcentajeAcumulado.toFixed(4));
@@ -366,6 +576,36 @@ export class Binominal {
         }
       ]
     };
+
+    // Calcular aceptación por lotes si está habilitada
+    if (this.usarAceptacionPorLotes()) {
+      this.calcularAceptacion();
+    } else {
+      this.filaAceptacion = null;
+    }
+  }
+
+  private calcularAceptacion() {
+    if (this.porcentajeAceptacion <= 0 || this.porcentajeAceptacion > 100) {
+      this.filaAceptacion = null;
+      return;
+    }
+
+    let filaSeleccionada: DistributionRow | null = null;
+    let mejorDiferencia = Infinity;
+
+    // Buscar la fila con porcentaje acumulado más cercano sin exceder
+    for (const fila of this.dataSource) {
+      if (fila.porcentajeAcumulado <= this.porcentajeAceptacion) {
+        const diferencia = this.porcentajeAceptacion - fila.porcentajeAcumulado;
+        if (diferencia < mejorDiferencia) {
+          mejorDiferencia = diferencia;
+          filaSeleccionada = fila;
+        }
+      }
+    }
+
+    this.filaAceptacion = filaSeleccionada;
   }
 
 
@@ -376,7 +616,17 @@ export class Binominal {
       Math.pow(1 - p, n - x);
   }
 
+  private hipergeometrica(N: number, k: number, n: number, x: number): number {
+    // P(X = x) = C(k, x) * C(N-k, n-x) / C(N, n)
+    const numerador = this.combinatoria(k, x) * this.combinatoria(N - k, n - x);
+    const denominador = this.combinatoria(N, n);
+    
+    if (denominador === 0) return 0;
+    return numerador / denominador;
+  }
+
   private combinatoria(n: number, x: number): number {
+    if (x < 0 || x > n) return 0;
     return this.factorial(n) /
       (this.factorial(x) * this.factorial(n - x));
   }

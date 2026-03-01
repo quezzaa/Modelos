@@ -1,0 +1,117 @@
+<body>
+@if(noload === 1){
+<mat-card>
+  <mat-card-title>Distribuciones de Probabilidad Continua - Normal</mat-card-title>
+  <br>
+
+  <mat-card-content class="form">
+    <!-- Parámetro: Media -->
+    <mat-form-field appearance="outline">
+      <mat-label>μ (Media)</mat-label>
+      <input matInput type="number" [ngModel]="media()" (ngModelChange)="media.set($event)" step="0.1">
+    </mat-form-field>
+
+    <!-- Parámetro: Desviación Estándar -->
+    <mat-form-field appearance="outline">
+      <mat-label>σ (Desviación Estándar) *</mat-label>
+      <input matInput type="number" [ngModel]="desviacion()" (ngModelChange)="desviacion.set($event)" step="0.1" min="0.01">
+      <mat-error *ngIf="desviacion() <= 0">Debe ser mayor a 0</mat-error>
+    </mat-form-field>
+
+    <!-- Rango de inicio para gráfica -->
+    <mat-form-field appearance="outline">
+      <mat-label>Rango Inicio (en σ)</mat-label>
+      <input matInput type="number" [ngModel]="rangoInicio()" (ngModelChange)="rangoInicio.set($event)" step="0.1">
+      <mat-hint>En desviaciones estándar</mat-hint>
+    </mat-form-field>
+
+    <!-- Rango de fin para gráfica -->
+    <mat-form-field appearance="outline">
+      <mat-label>Rango Fin (en σ)</mat-label>
+      <input matInput type="number" [ngModel]="rangoFin()" (ngModelChange)="rangoFin.set($event)" step="0.1">
+      <mat-hint>En desviaciones estándar</mat-hint>
+    </mat-form-field>
+
+    <!-- Número de pasos para la gráfica -->
+    <mat-form-field appearance="outline">
+      <mat-label>Pasos (10-1000)</mat-label>
+      <input matInput type="number" [ngModel]="pasos()" (ngModelChange)="pasos.set($event)" min="10" max="1000">
+    </mat-form-field>
+
+    <button mat-raised-button color="primary" (click)="calcular()">
+      Calcular
+    </button>
+  </mat-card-content>
+</mat-card>
+<br>
+
+<mat-card *ngIf="dataSource().length > 0">
+  <mat-card-title>Parámetros de la Distribución</mat-card-title>
+  <mat-card-content>
+    <p><strong>Media (μ):</strong> {{ mediaCalculo | number:'1.4-4' }}</p>
+    <p><strong>Desviación Estándar (σ):</strong> {{ desviacionCalculo | number:'1.4-4' }}</p>
+    <p><strong>Varianza (σ²):</strong> {{ (desviacionCalculo * desviacionCalculo) | number:'1.4-4' }}</p>
+    <p><strong>Rango calculado:</strong> {{ rangoInicio() }}σ a {{ rangoFin() }}σ</p>
+  </mat-card-content>
+</mat-card>
+<br>
+
+<mat-card *ngIf="dataSource().length > 0">
+  <mat-card-title>Resultados - Tabla de Valores</mat-card-title>
+  <mat-card-content>
+    <table mat-table [dataSource]="dataSource()" class="mat-elevation-z2">
+      <ng-container matColumnDef="z">
+        <th mat-header-cell *matHeaderCellDef>Z (σ)</th>
+        <td mat-cell *matCellDef="let e">{{ e.z | number:'1.4-4' }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="x">
+        <th mat-header-cell *matHeaderCellDef>X</th>
+        <td mat-cell *matCellDef="let e">{{ e.x | number:'1.4-4' }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="densidad">
+        <th mat-header-cell *matHeaderCellDef>f(x)</th>
+        <td mat-cell *matCellDef="let e">{{ e.densidad | number:'1.6-6' }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="acumulada">
+        <th mat-header-cell *matHeaderCellDef>F(x)</th>
+        <td mat-cell *matCellDef="let e">{{ e.acumulada | number:'1.6-6' }}</td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    </table>
+  </mat-card-content>
+</mat-card>
+<br>
+
+<mat-card *ngIf="dataSource().length > 0">
+  <mat-card-title>Gráfica - Función de Densidad</mat-card-title>
+  <canvas
+    baseChart
+    [data]="densityChartData"
+    [options]="densityChartOptions"
+    type="line">
+  </canvas>
+</mat-card>
+<br>
+
+<mat-card *ngIf="dataSource().length > 0">
+  <mat-card-title>Gráfica - Función Acumulada</mat-card-title>
+  <canvas
+    baseChart
+    [data]="cumulativeChartData"
+    [options]="cumulativeChartOptions"
+    type="line">
+  </canvas>
+</mat-card>
+}
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+</body>

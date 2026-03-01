@@ -43,7 +43,7 @@ export class SideBar {
       expandable: true,
       expanded: false,
       children: [
-        { label: 'item1', icon: 'show_chart', route: '/continuos/item1' },
+        { label: 'Normal', icon: 'show_chart', route: '/continuos/normal' },
       ]
     },
     {

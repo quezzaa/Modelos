@@ -24,3 +24,70 @@ mat-card{
 .content-container {
     margin-top: 30px;
 }
+
+.column-selectors {
+    background-color: #e8f4f8;
+    padding: 20px;
+    border-radius: 4px;
+    margin: 20px 0;
+    border-left: 4px solid #03a9f4;
+}
+
+.state-selector {
+    background-color: #f3e5f5;
+    padding: 20px;
+    border-radius: 4px;
+    margin: 20px 0;
+    border-left: 4px solid #9c27b0;
+}
+
+.selector-row {
+    display: flex;
+    gap: 15px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.selector-row mat-form-field {
+    min-width: 200px;
+}
+
+.result-container {
+    background-color: #f0f4c3;
+    padding: 20px;
+    border-radius: 4px;
+    margin-top: 30px;
+    border-left: 4px solid #fbc02d;
+}
+
+.result-box {
+    background-color: white;
+    padding: 15px;
+    border-radius: 4px;
+    margin: 15px 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.result-box p {
+    margin: 10px 0;
+    font-size: 16px;
+    color: #333;
+}
+
+.result-box strong {
+    color: #ff5722;
+}
+
+.distribution-selector {
+    background-color: white;
+    padding: 15px;
+    border-radius: 4px;
+    margin: 15px 0;
+    border: 1px solid #e0e0e0;
+}
+
+.distribution-selector h3 {
+    margin-top: 0;
+    color: #333;
+    font-size: 16px;
+}

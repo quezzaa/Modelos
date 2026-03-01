@@ -1,30 +1,106 @@
 <body>
 <mat-card>
-  <mat-card-title>Distribución Binominal</mat-card-title>
-<br>
+  <mat-card-title>Distribuciones de Probabilidad Discreta</mat-card-title>
+  <br>
+  
+  <!-- Notificación de datos del archivo -->
+  <div *ngIf="dataFromFile()" class="data-from-file-notice">
+    <strong>✓ Datos cargados del archivo:</strong>
+    <p>N (Población): {{ N }}</p>
+    <p>
+      <strong>p (Probabilidad):</strong> {{ p | number:'1.4-4' }}
+      <span style="font-size: 11px; color: #666;">(calculado: K/N)</span>
+    </p>
+    <p>
+      <strong>K (Éxitos en población):</strong> {{ k }}
+    </p>
+    <p *ngIf="selectedKState() !== ''">
+      <strong>Estado K seleccionado:</strong> <span style="background-color: #fff9c4; padding: 2px 8px; border-radius: 3px;">{{ selectedKState() }}</span>
+    </p>
+    <p>
+      <strong>Tipo de distribución actual:</strong> 
+      <span *ngIf="usarProbabilidad()" style="color: #2196f3;">Binomial (usando p)</span>
+      <span *ngIf="!usarProbabilidad()" style="color: #ff9800;">Hipergeométrica (usando K)</span>
+    </p>
+    <p style="font-size: 12px; margin-top: 10px; color: #666;">
+      <strong>Instrucciones:</strong> Ingresa <strong>n</strong> (tamaño de muestra) y <strong>x</strong> (valor o rango).<br>
+    </p>
+  </div>
+
   <mat-card-content class="form">
-    <mat-form-field appearance="outline">
+    <!-- Campo N - Deshabilitado si viene del archivo -->
+    <mat-form-field appearance="outline" [style.opacity]="dataFromFile() ? 0.6 : 1">
       <mat-label>N (población)</mat-label>
-      <input matInput type="number" [(ngModel)]="N">
+      <input matInput type="number" [(ngModel)]="N" [disabled]="dataFromFile()">
+      <mat-hint style="display: block; font-size: 16px; color: #666; margin-left: 24px;" *ngIf="dataFromFile()">Cargado del archivo</mat-hint>
     </mat-form-field>
 
+    <!-- Campo n - Required -->
     <mat-form-field appearance="outline">
-      <mat-label>n (muestra)</mat-label>
-      <input matInput type="number" [(ngModel)]="n">
+      <mat-label>n (muestra) *</mat-label>
+      <input matInput type="number" [(ngModel)]="n" required>
+      <mat-hint *ngIf="n > 0 && N > 0">{{ (n/N*100) | number:'1.2-2' }}% de N</mat-hint>
+      <mat-error *ngIf="n <= 0">n debe ser mayor a 0</mat-error>
     </mat-form-field>
 
-    <mat-form-field appearance="outline">
+    <!-- Campo p - Visible solo si se usa probabilidad -->
+    <mat-form-field appearance="outline" *ngIf="usarProbabilidad()" [style.opacity]="dataFromFile() ? 0.6 : 1">
       <mat-label>p (0 - 1)</mat-label>
-      <input matInput type="number" step="0.10" [(ngModel)]="p">
+      <input matInput type="number" step="0.10" [(ngModel)]="p" [disabled]="dataFromFile()">
+      <mat-hint style="display: block; font-size: 16px; color: #666; margin-left: 24px;" *ngIf="dataFromFile()">Cargado del archivo</mat-hint>
     </mat-form-field>
 
+    <!-- Campo k - Visible solo si se usa k (hipergeométrica) -->
+    <mat-form-field appearance="outline" *ngIf="!usarProbabilidad()" [style.opacity]="dataFromFile() ? 0.6 : 1">
+      <mat-label>k (éxitos en población)</mat-label>
+      <input matInput type="number" [(ngModel)]="k" [disabled]="dataFromFile()">
+      <mat-hint style="display: block; font-size: 16px; color: #666; margin-left: 24px;" *ngIf="dataFromFile()">Cargado del archivo</mat-hint>
+    </mat-form-field>
+
+    <!-- Campo x - Required -->
     <mat-form-field appearance="outline">
       <mat-label>x (valor o rango)</mat-label>
       <input matInput placeholder='Ej: "5", "0-3", ">3", ">=2", "<5"' [(ngModel)]="xRango">
     </mat-form-field>
+
+    <!-- Aceptación por lotes -->
+    <mat-form-field appearance="outline" style="width: 100%; margin-top: 10px;">
+      <mat-label>Aceptación por lotes</mat-label>
+      <mat-select [(ngModel)]="usarAceptacionPorLotes">
+        <mat-option [value]="false">No usar</mat-option>
+        <mat-option [value]="true">Usar aceptación por lotes</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <!-- Campo porcentaje de aceptación - Solo visible si está activado -->
+    <mat-form-field appearance="outline" *ngIf="usarAceptacionPorLotes">
+      <mat-label>Porcentaje de aceptación (%)</mat-label>
+      <input matInput type="number" min="0" max="100" step="0.01" [(ngModel)]="porcentajeAceptacion">
+      <mat-hint>Ingrese un valor entre 0 y 100%</mat-hint>
+    </mat-form-field>
+    
     <button mat-raised-button color="primary" (click)="calcular()">
       Calcular
     </button>
+  </mat-card-content>
+
+  <!-- Opciones de parámetros -->
+  <mat-card-content class="options">
+    <p><strong>Selecciona parámetro:</strong></p>
+    <mat-radio-group [(ngModel)]="usarProbabilidad">
+      <mat-radio-button [value]="true">
+        <strong>Usar probabilidad (p) - Binomial/Finita/Infinita</strong>
+        <span *ngIf="dataFromFile()" style="display: block; font-size: 16px; color: #666; margin-left: 24px;">
+          p = {{ p | number:'1.4-4' }}
+        </span>
+      </mat-radio-button>
+      <mat-radio-button [value]="false">
+        <strong>Usar éxitos (k) - Hipergeométrica</strong>
+        <span *ngIf="dataFromFile()" style="display: block; font-size: 16px; color: #666; margin-left: 24px;">
+          k = {{ k }}
+        </span>
+      </mat-radio-button>
+    </mat-radio-group>
   </mat-card-content>
 </mat-card>
 <br>
@@ -32,10 +108,12 @@
 <mat-card>
   <mat-card-title>Estadísticos</mat-card-title>
   <p>
-    <strong>Tipo de población:</strong>
-    {{ poblacionInfinita ? 'Infinita (n/N < 5%)' : 'Finita (5% ≤ n/N < 20%)' }}
+    <strong>Tipo de distribución:</strong>
+    <span *ngIf="tipoCalculoActual === 'infinita'">Binomial - Población Infinita (n/N < 5%)</span>
+    <span *ngIf="tipoCalculoActual === 'finita'">Binomial - Población Finita (5% ≤ n/N < 20%)</span>
+    <span *ngIf="tipoCalculoActual === 'hipergeometrica'">Hipergeométrica (n/N ≥ 20%)</span>
   </p>
-  <p *ngIf="!poblacionInfinita">
+  <p *ngIf="N > 0 && n > 0">
     <strong>Porcentaje muestra:</strong> {{ (n/N*100) | number:'1.2-2' }}%
   </p>
   <p>
@@ -44,11 +122,12 @@
   <p><strong>Media (μ): </strong> {{ media | number:'1.2-2' }}</p>
   <p><strong>Desviación estándar (σ):</strong></p>
   <ul>
-    <li *ngIf="poblacionInfinita"><strong>Desviación (σ): </strong> {{ desviacion | number:'1.4-4' }}</li>
-    <li *ngIf="!poblacionInfinita"><strong>Desviación finita (σ corregida):</strong> {{ desviacionFinita | number:'1.4-4' }}</li>
+    <li *ngIf="tipoCalculoActual === 'infinita'"><strong>Desviación (σ): </strong> {{ desviacion | number:'1.4-4' }}</li>
+    <li *ngIf="tipoCalculoActual === 'finita'"><strong>Desviación finita (σ corregida):</strong> {{ desviacionFinita | number:'1.4-4' }}</li>
+    <li *ngIf="tipoCalculoActual === 'hipergeometrica'"><strong>Desviación (σ): </strong> {{ desviacion | number:'1.4-4' }}</li>
   </ul>
 
-  <p *ngIf="!poblacionInfinita">
+  <p *ngIf="tipoCalculoActual === 'finita'">
     <strong>Factor de Corrección:</strong> {{ factorCorreccion | number:'1.4-4' }}
   </p>
 
@@ -68,15 +147,15 @@
   <br>
   <table mat-table [dataSource]="dataSource" class="mat-elevation-z2">
 
-    <ng-container matColumnDef="k">
-      <th mat-header-cell *matHeaderCellDef>n</th>
-      <td mat-cell *matCellDef="let e">{{ e.k }}</td>
+    <ng-container matColumnDef="x">
+      <th mat-header-cell *matHeaderCellDef>x</th>
+      <td mat-cell *matCellDef="let e">{{ e.x }}</td>
     </ng-container>
 
-    <ng-container matColumnDef="binominal">
+    <ng-container matColumnDef="probabilidad">
       <th mat-header-cell *matHeaderCellDef>P(x)</th>
       <td mat-cell *matCellDef="let e">
-        {{ e.binominal | number:'1.6-6' }}
+        {{ e.probabilidad | number:'1.6-6' }}
       </td>
     </ng-container>
 
@@ -102,7 +181,8 @@
     </ng-container>
 
     <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-    <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    <tr mat-row *matRowDef="let row; columns: displayedColumns;" 
+        [ngClass]="{'fila-aceptacion': (row === filaAceptacion && usarAceptacionPorLotes())}"></tr>
 
   </table>
   <br>

@@ -22,6 +22,37 @@ interface DistributionRow {
   porcentajeAcumulado: number;
 }
 
+interface DistributionComparison {
+  binomial: {
+    dataSource: DistributionRow[];
+    media: number;
+    desviacion: number;
+    desviacionFinita: number;
+    factorCorreccion: number;
+    sesgo: number;
+    interpretacionSesgo: string;
+    curtosis: number;
+    interpretacionCurtosis: string;
+    tipoCalculoActual: string;
+    barChartData: ChartConfiguration<'bar'>['data'];
+    lineChartData: ChartConfiguration<'line'>['data'];
+  };
+  hipergeometrica: {
+    dataSource: DistributionRow[];
+    media: number;
+    desviacion: number;
+    desviacionFinita: number;
+    factorCorreccion: number;
+    sesgo: number;
+    interpretacionSesgo: string;
+    curtosis: number;
+    interpretacionCurtosis: string;
+    tipoCalculoActual: string;
+    barChartData: ChartConfiguration<'bar'>['data'];
+    lineChartData: ChartConfiguration<'line'>['data'];
+  };
+}
+
 @Component({
   selector: 'app-binominal',
   standalone: true,
@@ -47,6 +78,10 @@ export class Binominal implements OnInit {
   usarProbabilidad = signal(true); // true: usa p, false: usa k
   dataFromFile = signal(false);
   selectedKState = signal<string>('');
+
+  // Comparación entre distribuciones
+  mostrarComparacion = signal(false);
+  datosComparacion: DistributionComparison | null = null;
 
   // Aceptación por lotes
   usarAceptacionPorLotes = signal(false);
@@ -202,57 +237,342 @@ export class Binominal implements OnInit {
 
     const porcentajeMuestra = (this.n / this.N) * 100;
 
-    // Si está en binomial pero n/N >= 20%, sugerir cambiar a hipergeométrica
-    if (this.usarProbabilidad() && porcentajeMuestra >= 20) {
-      const cambio = confirm(
-        `⚠ n/N = ${porcentajeMuestra.toFixed(2)}% >= 20%\n\n` +
-        `Para esta relación se recomienda usar Hipergeométrica.\n\n` +
-        `¿Desea cambiar a Hipergeométrica?`
-      );
-      if (cambio) {
-        this.usarProbabilidad.set(false);
-        this.tipoDistribucion = 'hipergeometrica';
-        // El k ya está cargado del archivo, solo cambiamos el tipo
-      } else {
-        alert('Continuando con Binomial. Tenga en cuenta que la aproximación puede no ser óptima.');
-      }
-    }
-
-    // Si está en hipergeométrica pero n/N < 20%, sugerir cambiar a binomial
-    if (!this.usarProbabilidad() && porcentajeMuestra < 20) {
-      const cambio = confirm(
-        `⚠ n/N = ${porcentajeMuestra.toFixed(2)}% < 20%\n\n` +
-        `Para esta relación se recomienda usar Binomial.\n\n` +
-        `¿Desea cambiar a Binomial?`
-      );
-      if (cambio) {
-        this.usarProbabilidad.set(true);
-        this.tipoDistribucion = 'binomial';
-        // El p ya está cargado del archivo, solo cambiamos el tipo
-      } else {
-        alert('Continuando con Hipergeométrica.');
-      }
-    }
-
-    // Si el usuario elige usar probabilidad (p), usa Binomial
-    // Si elige usar éxitos (k), usa Hipergeométrica
-    if (this.usarProbabilidad()) {
-      // Determinar si es infinita o finita basado en n/N
-      if (porcentajeMuestra < 5) {
-        this.tipoCalculoActual = 'infinita';
-      } else if (porcentajeMuestra <= 20) {
-        this.tipoCalculoActual = 'finita';
-      } else {
-        // Si ya preguntamos y el usuario quiso continuar, permitir
-        if (porcentajeMuestra >= 20) {
-          alert(`Para n/N = ${porcentajeMuestra.toFixed(2)}% (> 20%), la aproximación binomial puede no ser precisa.`);
+    if (this.mostrarComparacion()) {
+      // Modo comparación: calcular ambas distribuciones
+      this.calcularComparacion();
+    } else {
+      // Modo normal: calcular según selección
+      // Si está en binomial pero n/N >= 20%, sugerir cambiar a hipergeométrica
+      if (this.usarProbabilidad() && porcentajeMuestra >= 20) {
+        const cambio = confirm(
+          `⚠ n/N = ${porcentajeMuestra.toFixed(2)}% >= 20%\n\n` +
+          `Para esta relación se recomienda usar Hipergeométrica.\n\n` +
+          `¿Desea cambiar a Hipergeométrica?`
+        );
+        if (cambio) {
+          this.usarProbabilidad.set(false);
+          this.tipoDistribucion = 'hipergeometrica';
+        } else {
+          alert('Continuando con Binomial. Tenga en cuenta que la aproximación puede no ser óptima.');
         }
       }
-      this.calcularBinomial();
-    } else {
-      this.tipoCalculoActual = 'hipergeometrica';
-      this.calcularHipergeometrica();
+
+      // Si está en hipergeométrica pero n/N < 20%, sugerir cambiar a binomial
+      if (!this.usarProbabilidad() && porcentajeMuestra < 20) {
+        const cambio = confirm(
+          `⚠ n/N = ${porcentajeMuestra.toFixed(2)}% < 20%\n\n` +
+          `Para esta relación se recomienda usar Binomial.\n\n` +
+          `¿Desea cambiar a Binomial?`
+        );
+        if (cambio) {
+          this.usarProbabilidad.set(true);
+          this.tipoDistribucion = 'binomial';
+        } else {
+          alert('Continuando con Hipergeométrica.');
+        }
+      }
+
+      // Si el usuario elige usar probabilidad (p), usa Binomial
+      // Si elige usar éxitos (k), usa Hipergeométrica
+      if (this.usarProbabilidad()) {
+        // Determinar si es infinita o finita basado en n/N
+        if (porcentajeMuestra < 5) {
+          this.tipoCalculoActual = 'infinita';
+        } else if (porcentajeMuestra <= 20) {
+          this.tipoCalculoActual = 'finita';
+        } else {
+          if (porcentajeMuestra >= 20) {
+            alert(`Para n/N = ${porcentajeMuestra.toFixed(2)}% (> 20%), la aproximación binomial puede no ser precisa.`);
+          }
+        }
+        this.calcularBinomial();
+      } else {
+        this.tipoCalculoActual = 'hipergeometrica';
+        this.calcularHipergeometrica();
+      }
     }
+  }
+
+  private calcularComparacion() {
+    // Parse y validar x
+    const valoresX = this.parseXRango();
+    if (!this.xValido) {
+      alert(this.xMensaje);
+      return;
+    }
+
+    this.datosComparacion = {
+      binomial: this.calcularDistribucionBinomial(valoresX),
+      hipergeometrica: this.calcularDistribucionHipergeometrica(valoresX)
+    };
+  }
+
+  private calcularDistribucionBinomial(valoresX: number[]): DistributionComparison['binomial'] {
+    // Validaciones
+    if (this.p < 0 || this.p > 1) {
+      alert('p debe estar entre 0 y 1');
+      return this.crearDistribucionVacia('infinita');
+    }
+
+    const porcentajeMuestra = (this.n / this.N) * 100;
+    let tipoCalculoActual = '';
+
+    if (porcentajeMuestra < 5) {
+      tipoCalculoActual = 'infinita';
+    } else if (porcentajeMuestra <= 20) {
+      tipoCalculoActual = 'finita';
+    } else {
+      tipoCalculoActual = 'infinita';
+    }
+
+    this.poblacionInfinita = tipoCalculoActual === 'infinita';
+
+    const dataSource: DistributionRow[] = [];
+    let acumuladaTotal = 0;
+
+    // Calcular distribución para todos los valores 0 a n
+    const distribucionCompleta: DistributionRow[] = [];
+    for (let x = 0; x <= this.n; x++) {
+      const px = this.binomial(this.n, x, this.p);
+      acumuladaTotal += px;
+      distribucionCompleta.push({
+        x: x,
+        probabilidad: px,
+        acumulada: acumuladaTotal,
+        porcentaje: px * 100,
+        porcentajeAcumulado: acumuladaTotal * 100
+      });
+    }
+
+    // Filtrar solo los valores de x solicitados
+    const dataSourceFiltrado = distribucionCompleta.filter(row => valoresX.includes(row.x));
+
+    if (dataSourceFiltrado.length === 0) {
+      return this.crearDistribucionVacia(tipoCalculoActual);
+    }
+
+    // Recalcular acumulada según el rango filtrado
+    let acumuladaFiltrada = 0;
+    for (let row of dataSourceFiltrado) {
+      acumuladaFiltrada += row.probabilidad;
+      row.acumulada = acumuladaFiltrada;
+      row.porcentajeAcumulado = acumuladaFiltrada * 100;
+    }
+
+    // Calcular estadísticos
+    const media = this.n * this.p;
+    const varianzaInfinita = this.n * this.p * (1 - this.p);
+    const desviacion = Math.sqrt(varianzaInfinita);
+    let factorCorreccion = 1;
+    let desviacionFinita = desviacion;
+
+    if (tipoCalculoActual === 'finita' && this.N > 1) {
+      factorCorreccion = Math.sqrt((this.N - this.n) / (this.N - 1));
+      desviacionFinita = desviacion * factorCorreccion;
+    }
+
+    const varianzaReal = tipoCalculoActual === 'infinita'
+      ? varianzaInfinita
+      : varianzaInfinita * (factorCorreccion ** 2);
+
+    let sesgo = 0;
+    let curtosis = 0;
+
+    if (varianzaReal !== 0) {
+      const sigmaReal = Math.sqrt(varianzaReal);
+      sesgo = (1 - 2 * this.p) / sigmaReal;
+      curtosis = (1 - 6 * this.p * (1 - this.p)) / varianzaReal;
+    }
+
+    sesgo = +sesgo.toFixed(2);
+    curtosis = +curtosis.toFixed(2);
+
+    const interpretacionSesgo = sesgo === 0.00 ? 'Neutro (Simétrica)' : 
+                                sesgo > 0 ? 'Positivo (Asimetría derecha)' : 
+                                'Negativo (Asimetría izquierda)';
+    const interpretacionCurtosis = curtosis === 0.00 ? 'Mesocúrtica' : 
+                                   curtosis > 0 ? 'Leptocúrtica' : 
+                                   'Platicúrtica';
+
+    // Gráficas
+    const labels = dataSourceFiltrado.map(d => `x=${d.x}`);
+    const porcentajes = dataSourceFiltrado.map(d => +d.porcentaje.toFixed(4));
+    const porcentajesAcumulados = dataSourceFiltrado.map(d => +d.porcentajeAcumulado.toFixed(4));
+
+    const barChartData: ChartConfiguration<'bar'>['data'] = {
+      labels: labels,
+      datasets: [{
+        data: porcentajes,
+        label: 'P(x) %'
+      }]
+    };
+
+    const lineChartData: ChartConfiguration<'line'>['data'] = {
+      labels: labels,
+      datasets: [{
+        data: porcentajesAcumulados,
+        label: 'P(x) % acumulada',
+        fill: false,
+        pointRadius: 10,
+        pointHoverRadius: 14
+      }]
+    };
+
+    return {
+      dataSource: dataSourceFiltrado,
+      media,
+      desviacion,
+      desviacionFinita,
+      factorCorreccion,
+      sesgo,
+      interpretacionSesgo,
+      curtosis,
+      interpretacionCurtosis,
+      tipoCalculoActual,
+      barChartData,
+      lineChartData
+    };
+  }
+
+  private calcularDistribucionHipergeometrica(valoresX: number[]): DistributionComparison['hipergeometrica'] {
+    // Validaciones
+    if (this.k < 0 || this.k > this.N) {
+      alert(`k (éxitos en población) debe estar entre 0 y ${this.N}`);
+      return this.crearDistribucionVacia('hipergeometrica');
+    }
+    if(this.k === 0){
+      this.k = this.p * this.N
+    }
+
+    const xMin = Math.max(0, this.n + this.k - this.N);
+    const xMax = Math.min(this.n, this.k);
+
+    const dataSource: DistributionRow[] = [];
+    let acumuladaTotal = 0;
+
+    // Calcular distribución hipergeométrica
+    const distribucionCompleta: DistributionRow[] = [];
+    for (let x = xMin; x <= xMax; x++) {
+      const px = this.hipergeometrica(this.N, this.k, this.n, x);
+      acumuladaTotal += px;
+      distribucionCompleta.push({
+        x: x,
+        probabilidad: px,
+        acumulada: acumuladaTotal,
+        porcentaje: px * 100,
+        porcentajeAcumulado: acumuladaTotal * 100
+      });
+    }
+
+    // Filtrar solo los valores de x solicitados
+    const dataSourceFiltrado = distribucionCompleta.filter(row => valoresX.includes(row.x));
+
+    if (dataSourceFiltrado.length === 0) {
+      return this.crearDistribucionVacia('hipergeometrica');
+    }
+
+    // Recalcular acumulada según el rango filtrado
+    let acumuladaFiltrada = 0;
+    for (let row of dataSourceFiltrado) {
+      acumuladaFiltrada += row.probabilidad;
+      row.acumulada = acumuladaFiltrada;
+      row.porcentajeAcumulado = acumuladaFiltrada * 100;
+    }
+
+    // Calcular estadísticos
+    const media = (this.n * this.k) / this.N;
+    const pHiper = this.k / this.N;
+    const qHiper = 1 - pHiper;
+    const varianza = (this.n * pHiper * qHiper * (this.N - this.n)) / (this.N - 1);
+    const desviacion = Math.sqrt(varianza);
+    const desviacionFinita = desviacion;
+    const factorCorreccion = 1;
+
+    let sesgo = 0;
+    let curtosis = 0;
+
+    if (desviacion !== 0) {
+      sesgo = ((qHiper - pHiper) * (this.N - 2 * this.n)) / ((this.N - 2) * desviacion);
+
+      // Curtosis correcta para hipergeométrica
+      // γ₂ = [(N-1)*N² * (N*(N+1) - 6*n*(N-n)) - 6*n*(N-n)*(N²-3)] / [n*K*(N-K)*(N-n)*(N-2)*(N-3)] - 3
+      const termino1 = (this.N - 1) * Math.pow(this.N, 2) * (this.N * (this.N + 1) - 6 * this.n * (this.N - this.n));
+      const termino2 = 6 * this.n * (this.N - this.n) * (Math.pow(this.N, 2) - 3);
+      const numerador = termino1 - termino2;
+      const denominador = this.n * this.k * (this.N - this.k) * (this.N - this.n) * (this.N - 2) * (this.N - 3);
+
+      if (denominador !== 0) {
+        curtosis = (numerador / denominador) - 3;
+      } else {
+        curtosis = 0;
+      }
+    }
+
+    sesgo = +sesgo.toFixed(2);
+    curtosis = +curtosis.toFixed(2);
+
+    const interpretacionSesgo = sesgo === 0.00 ? 'Neutro (Simétrica)' : 
+                                sesgo > 0 ? 'Positivo (Asimetría derecha)' : 
+                                'Negativo (Asimetría izquierda)';
+    const interpretacionCurtosis = curtosis === 0.00 ? 'Mesocúrtica' : 
+                                   curtosis > 0 ? 'Leptocúrtica' : 
+                                   'Platicúrtica';
+
+    // Gráficas
+    const labels = dataSourceFiltrado.map(d => `x=${d.x}`);
+    const porcentajes = dataSourceFiltrado.map(d => +d.porcentaje.toFixed(4));
+    const porcentajesAcumulados = dataSourceFiltrado.map(d => +d.porcentajeAcumulado.toFixed(4));
+
+    const barChartData: ChartConfiguration<'bar'>['data'] = {
+      labels: labels,
+      datasets: [{
+        data: porcentajes,
+        label: 'P(x) %'
+      }]
+    };
+
+    const lineChartData: ChartConfiguration<'line'>['data'] = {
+      labels: labels,
+      datasets: [{
+        data: porcentajesAcumulados,
+        label: 'P(x) % acumulada',
+        fill: false,
+        pointRadius: 10,
+        pointHoverRadius: 14
+      }]
+    };
+
+    return {
+      dataSource: dataSourceFiltrado,
+      media,
+      desviacion,
+      desviacionFinita,
+      factorCorreccion,
+      sesgo,
+      interpretacionSesgo,
+      curtosis,
+      interpretacionCurtosis,
+      tipoCalculoActual: 'hipergeometrica',
+      barChartData,
+      lineChartData
+    };
+  }
+
+  private crearDistribucionVacia(tipo: string) {
+    return {
+      dataSource: [],
+      media: 0,
+      desviacion: 0,
+      desviacionFinita: 0,
+      factorCorreccion: 1,
+      sesgo: 0,
+      interpretacionSesgo: '',
+      curtosis: 0,
+      interpretacionCurtosis: '',
+      tipoCalculoActual: tipo,
+      barChartData: { labels: [], datasets: [{ data: [], label: 'P(x) %' }] },
+      lineChartData: { labels: [], datasets: [{ data: [], label: 'P(x) % acumulada', fill: false }] }
+    };
   }
 
   private calcularBinomial() {
@@ -426,15 +746,17 @@ export class Binominal implements OnInit {
       // Sesgo: (Q - P) * (N - 2n) / ((N - 2) * σ)
       this.sesgo = ((qHiper - pHiper) * (this.N - 2 * this.n)) / ((this.N - 2) * this.desviacion);
 
-      // Curtosis: [(N² * (N-1) * (1 + 6*n*(N-n) - 6*n*p*q) - 6*n*(N-n)*(N-n)*(N-1)) / (n*p*q*(N-2)*(N-3)*(N-n))]
-      const numerador = Math.pow(this.N, 2) * (this.N - 1) * (1 + 6 * this.n * (this.N - this.n) - 6 * this.n * pHiper * qHiper);
-      const segundoTermino = 6 * this.n * (this.N - this.n) * (this.N - this.n) * (this.N - 1);
-      const denominador = this.n * pHiper * qHiper * (this.N - 2) * (this.N - 3) * (this.N - this.n);
+      // Curtosis correcta para hipergeométrica
+      // γ₂ = [(N-1)*N² * (N*(N+1) - 6*n*(N-n)) - 6*n*(N-n)*(N²-3)] / [n*K*(N-K)*(N-n)*(N-2)*(N-3)] - 3
+      const termino1 = (this.N - 1) * Math.pow(this.N, 2) * (this.N * (this.N + 1) - 6 * this.n * (this.N - this.n));
+      const termino2 = 6 * this.n * (this.N - this.n) * (Math.pow(this.N, 2) - 3);
+      const numerador = termino1 - termino2;
+      const denominador = this.n * this.k * (this.N - this.k) * (this.N - this.n) * (this.N - 2) * (this.N - 3);
 
       if (denominador === 0) {
         this.curtosis = 0;
       } else {
-        this.curtosis = (numerador - segundoTermino) / denominador;
+        this.curtosis = (numerador / denominador) - 3;
       }
     }
 

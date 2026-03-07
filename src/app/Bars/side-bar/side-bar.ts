@@ -53,6 +53,7 @@ export class SideBar {
       expanded: false,
       children: [
         { label: 'Binominal', icon: 'model_training', route: '/discretos/binominal' },
+        { label: 'Poisson', icon: 'equalizer', route: '/discretos/poisson' },
       ]
     },
     {

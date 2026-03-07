@@ -26,5 +26,11 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./Lectura/archivos/archivos')
         .then(a => a.Archivos)
+  },
+  {
+    path: 'discretos/poisson',
+    loadComponent: () =>
+      import('./Discretos/poisson/poisson')
+        .then(p => p.Poisson)
   }
 ];

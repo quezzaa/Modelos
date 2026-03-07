@@ -2,8 +2,9 @@ import { Injectable } from '@angular/core';
 import { signal } from '@angular/core';
 
 export interface ProcessedFileData {
-  N: number; // Número de filas (sample size)
-  K: number; // Número de éxitos en la población
+  N?: number; // Número de filas (sample size)
+  n?:number;
+  K?: number; // Número de éxitos en la población
   p?: number; // Probabilidad calculada (p = K/N)
   distributionType: 'binomial' | 'hipergeometrica'; // Tipo de distribución
   selectedKState?: string; // Estado seleccionado de K

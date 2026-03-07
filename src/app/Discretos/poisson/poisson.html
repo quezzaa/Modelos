@@ -1,0 +1,164 @@
+<body>
+<mat-card>
+  <mat-card-title>Distribución de Probabilidad de Poisson</mat-card-title>
+  <br>
+  
+  <!-- Notificación de datos del archivo -->
+  <div *ngIf="dataFromFile()" class="data-from-file-notice">
+    <strong>✓ Datos cargados del archivo:</strong>
+    <p>
+      <strong>n (Tamaño de muestra):</strong> {{ n }}
+    </p>
+    <p>
+      <strong>p (Probabilidad):</strong> {{ p | number:'1.4-4' }}
+    </p>
+    <p>
+      <strong>λ (Lambda calculado):</strong> {{ lambda | number:'1.4-4' }} (n × p)
+    </p>
+    <p *ngIf="validarAproximacion()" style="margin-top: 10px; padding: 10px; background-color: #fff9c4; border-radius: 3px;">
+      <strong>Validación de Poisson como aproximación:</strong>
+      <span *ngIf="!debeUsarBinomial" style="color: #4caf50;">✓ Condiciones cumplidas</span>
+      <span *ngIf="debeUsarBinomial" style="color: #f57c00;">⚠ Se recomienda Binomial</span>
+    </p>
+    <p style="font-size: 12px; margin-top: 10px; color: #666;">
+      <strong>Instrucciones:</strong> Ingresa <strong>λ (lambda)</strong> y <strong>x</strong> (valor o rango).<br>
+      O usa los valores cargados del archivo modificando solo <strong>x</strong>.
+    </p>
+  </div>
+
+  <mat-card-content class="form">
+    <!-- Campo n - Para validación (deshabilitado si viene del archivo) -->
+    <mat-form-field appearance="outline" [style.opacity]="dataFromFile() ? 0.6 : 1">
+      <mat-label>n (muestra)</mat-label>
+      <input matInput type="number" [(ngModel)]="n" [disabled]="dataFromFile()">
+      <mat-hint style="display: block; font-size: 16px; color: #666; margin-left: 24px;" *ngIf="dataFromFile()">Cargado del archivo</mat-hint>
+      <!--<mat-hint *ngIf="!dataFromFile()">Para validar si Poisson es apropiada</mat-hint>-->
+    </mat-form-field>
+
+    <!-- Campo p - Para validación (deshabilitado si viene del archivo) -->
+    <mat-form-field appearance="outline" [style.opacity]="dataFromFile() ? 0.6 : 1">
+      <mat-label>p (probabilidad)</mat-label>
+      <input matInput type="number" step="0.01" [(ngModel)]="p" [disabled]="dataFromFile()">
+      <mat-hint style="display: block; font-size: 16px; color: #666; margin-left: 24px;" *ngIf="dataFromFile()">Cargado del archivo</mat-hint>
+      <!--<mat-hint *ngIf="!dataFromFile()">Para validar si Poisson es apropiada</mat-hint>-->
+    </mat-form-field>
+
+    <!-- Campo λ (Lambda) - Opcional -->
+    <mat-form-field appearance="outline">
+      <mat-label>λ (lambda)</mat-label>
+      <input matInput type="number" step="0.1" [(ngModel)]="lambda">
+      <mat-hint>Dejar vacío para calcular como n × p</mat-hint>
+    </mat-form-field>
+
+    <!-- Campo x - Required -->
+    <mat-form-field appearance="outline">
+      <mat-label>x (valor o rango)</mat-label>
+      <input matInput placeholder='Ej: "5", "0-3", ">3", ">=2", "<5"' [(ngModel)]="xRango">
+    </mat-form-field>
+    
+    <button mat-raised-button color="primary" (click)="calcular()">
+      Calcular
+    </button>
+  </mat-card-content>
+</mat-card>
+<br>
+
+<!-- ====== ESTADÍSTICOS ====== -->
+<mat-card *ngIf="dataSource.length > 0">
+  <mat-card-title>Estadísticos</mat-card-title>
+  <p>
+    <strong>Parámetro λ (Lambda):</strong> {{ lambda | number:'1.4-4' }}
+  </p>
+  <p>
+    <strong>Valores de x calculados:</strong> {{ xRango }}
+  </p>
+  <p><strong>Media (μ): </strong> {{ media | number:'1.4-4' }}</p>
+  <p><strong>Desviación estándar (σ):</strong> {{ desviacion | number:'1.4-4' }}</p>
+  
+  <p>
+    <strong>Sesgo: </strong> {{ sesgo | number:'1.4-4' }}<br>
+    <strong style="font-size: 13px; color: #666;">{{ interpretacionSesgo }}</strong> 
+  </p>
+
+  <p>
+    <strong>Curtosis (Excesiva): </strong> {{ curtosis | number:'1.4-4' }}<br>
+    <strong style="font-size: 13px; color: #666;">{{ interpretacionCurtosis }}</strong> 
+  </p>
+</mat-card>
+<br>
+
+<!-- ====== RESULTADOS ====== -->
+<mat-card *ngIf="dataSource.length > 0">
+  <mat-card-title>Resultados</mat-card-title>
+  <br>
+  <table mat-table [dataSource]="dataSource" class="mat-elevation-z2">
+
+    <ng-container matColumnDef="x">
+      <th mat-header-cell *matHeaderCellDef>x</th>
+      <td mat-cell *matCellDef="let e">{{ e.x }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="probabilidad">
+      <th mat-header-cell *matHeaderCellDef>P(x)</th>
+      <td mat-cell *matCellDef="let e">
+        {{ e.probabilidad | number:'1.6-6' }}
+      </td>
+    </ng-container>
+
+    <ng-container matColumnDef="acumulada">
+      <th mat-header-cell *matHeaderCellDef>P(x) Acumulada</th>
+      <td mat-cell *matCellDef="let e">
+        {{ e.acumulada | number:'1.6-6' }}
+      </td>
+    </ng-container>
+
+    <ng-container matColumnDef="porcentaje">
+      <th mat-header-cell *matHeaderCellDef>p%</th>
+      <td mat-cell *matCellDef="let e">
+        {{ e.porcentaje | number:'1.6-6' }}%
+      </td>
+    </ng-container>
+
+    <ng-container matColumnDef="porcentajeAcumulado">
+      <th mat-header-cell *matHeaderCellDef>p% Acumulada</th>
+      <td mat-cell *matCellDef="let e">
+        {{ e.porcentajeAcumulado | number:'1.6-6' }}%
+      </td>
+    </ng-container>
+
+    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+    <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+
+  </table>
+  <br>
+</mat-card>
+<br>
+
+<!-- ====== GRÁFICAS ====== -->
+<mat-card *ngIf="dataSource.length > 0">
+  <mat-card-title>Gráfica p%</mat-card-title>
+  <canvas
+  baseChart
+  [data]="barChartData"
+  [options]="barChartOptions"
+  type="bar">
+</canvas>
+</mat-card>
+
+<br>
+
+<mat-card *ngIf="dataSource.length > 0">
+  <mat-card-title>Gráfica p% acumulada</mat-card-title>
+  <canvas
+  baseChart
+  [data]="lineChartData"
+  [options]="lineChartOptions"
+  type="line">
+</canvas>
+</mat-card>
+<br>
+<br>
+<br>
+<br>
+<br>
+</body>

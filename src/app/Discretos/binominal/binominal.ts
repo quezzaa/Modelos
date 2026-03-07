@@ -100,9 +100,13 @@ export class Binominal implements OnInit {
     effect(() => {
       const fileData = this.fileDataService.getFileData();
       if (fileData) {
-        this.N = fileData.N;
-        this.k = fileData.K;
-        this.p = fileData.p || (fileData.K / fileData.N);
+        this.N = fileData.N??0;
+        this.n = fileData.n??0;
+        this.k = fileData.K??0;
+        if(fileData.K !== undefined && fileData.N !== undefined){
+          this.p = fileData.p || (fileData.K / fileData.N);
+        }
+        
         this.selectedKState.set(fileData.selectedKState || 'archivo');
         
         // Determinar el tipo de distribución inicial

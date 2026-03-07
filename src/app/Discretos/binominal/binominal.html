@@ -32,7 +32,7 @@
     <!-- Campo N - Deshabilitado si viene del archivo -->
     <mat-form-field appearance="outline" [style.opacity]="dataFromFile() ? 0.6 : 1">
       <mat-label>N (población)</mat-label>
-      <input matInput type="number" [(ngModel)]="N" [disabled]="dataFromFile()">
+      <input matInput type="number" [(ngModel)]="N" [disabled]="dataFromFile()&& N !=0">
       <mat-hint style="display: block; font-size: 16px; color: #666; margin-left: 24px;" *ngIf="dataFromFile()">Cargado del archivo</mat-hint>
     </mat-form-field>
 

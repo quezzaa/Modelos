@@ -53,6 +53,36 @@ interface DistributionComparison {
   };
 }
 
+interface DistributionComparisonPoisson {
+  distribucion1: {
+    nombre?: string;
+    dataSource: DistributionRow[];
+    media: number;
+    desviacion: number;
+    desviacionFinita: number;
+    factorCorreccion: number;
+    sesgo: number;
+    interpretacionSesgo: string;
+    curtosis: number;
+    interpretacionCurtosis: string;
+    tipoCalculoActual: string;
+    barChartData: ChartConfiguration<'bar'>['data'];
+    lineChartData: ChartConfiguration<'line'>['data'];
+  };
+  poisson: {
+    dataSource: DistributionRow[];
+    media: number;
+    desviacion: number;
+    sesgo: number;
+    interpretacionSesgo: string;
+    curtosis: number;
+    interpretacionCurtosis: string;
+    lambda: number;
+    barChartData: ChartConfiguration<'bar'>['data'];
+    lineChartData: ChartConfiguration<'line'>['data'];
+  };
+}
+
 @Component({
   selector: 'app-binominal',
   standalone: true,
@@ -81,7 +111,9 @@ export class Binominal implements OnInit {
 
   // Comparación entre distribuciones
   mostrarComparacion = signal(false);
+  tipoComparacion: 'binomial-hipergeometrica' | 'binomial-poisson' | 'hipergeometrica-poisson' = 'binomial-hipergeometrica';
   datosComparacion: DistributionComparison | null = null;
+  datosComparacionPoisson: DistributionComparisonPoisson | null = null;
 
   // Aceptación por lotes
   usarAceptacionPorLotes = signal(false);
@@ -305,10 +337,25 @@ export class Binominal implements OnInit {
       return;
     }
 
-    this.datosComparacion = {
-      binomial: this.calcularDistribucionBinomial(valoresX),
-      hipergeometrica: this.calcularDistribucionHipergeometrica(valoresX)
-    };
+    if (this.tipoComparacion === 'binomial-hipergeometrica') {
+      this.datosComparacion = {
+        binomial: this.calcularDistribucionBinomial(valoresX),
+        hipergeometrica: this.calcularDistribucionHipergeometrica(valoresX)
+      };
+      this.datosComparacionPoisson = null;
+    } else if (this.tipoComparacion === 'binomial-poisson') {
+      this.datosComparacionPoisson = {
+        distribucion1: this.calcularDistribucionBinomial(valoresX),
+        poisson: this.calcularDistribucionPoissonComparacion(valoresX)
+      };
+      this.datosComparacion = null;
+    } else if (this.tipoComparacion === 'hipergeometrica-poisson') {
+      this.datosComparacionPoisson = {
+        distribucion1: this.calcularDistribucionHipergeometrica(valoresX),
+        poisson: this.calcularDistribucionPoissonComparacion(valoresX)
+      };
+      this.datosComparacion = null;
+    }
   }
 
   private calcularDistribucionBinomial(valoresX: number[]): DistributionComparison['binomial'] {
@@ -574,6 +621,141 @@ export class Binominal implements OnInit {
       curtosis: 0,
       interpretacionCurtosis: '',
       tipoCalculoActual: tipo,
+      barChartData: { labels: [], datasets: [{ data: [], label: 'P(x) %' }] },
+      lineChartData: { labels: [], datasets: [{ data: [], label: 'P(x) % acumulada', fill: false }] }
+    };
+  }
+
+  private calcularDistribucionPoissonComparacion(valoresX: number[]): DistributionComparisonPoisson['poisson'] {
+    // Calcular lambda según el tipo de comparación
+    let lambda = 0;
+    let pParam = 0; // Para validación
+
+    if (this.tipoComparacion === 'hipergeometrica-poisson') {
+      // Para hipergeométrica-poisson: usar k/N como probabilidad aproximada
+      const pHiper = this.k / this.N;
+      lambda = this.n * pHiper;
+      pParam = pHiper;
+    } else {
+      // Para binomial-poisson: usar p directamente
+      lambda = this.n * this.p;
+      pParam = this.p;
+    }
+
+    // Validar que sea apropiado usar Poisson
+    if (pParam >= 0.10 || lambda >= 10) {
+      console.warn('⚠ No se cumplen criterios óptimos para Poisson. Continuando con cálculo.');
+    }
+
+    const dataSource: DistributionRow[] = [];
+    let acumuladaTotal = 0;
+
+    // Calcular distribución para todos los valores 0 a un máximo razonable
+    const maxX = Math.max(
+      ...valoresX,
+      Math.ceil(lambda + 3 * Math.sqrt(lambda))
+    );
+
+    const distribucionCompleta: DistributionRow[] = [];
+    for (let x = 0; x <= maxX; x++) {
+      const px = this.poisson(lambda, x);
+      acumuladaTotal += px;
+      distribucionCompleta.push({
+        x: x,
+        probabilidad: px,
+        acumulada: acumuladaTotal,
+        porcentaje: px * 100,
+        porcentajeAcumulado: acumuladaTotal * 100
+      });
+    }
+
+    // Filtrar solo los valores de x solicitados
+    const dataSourceFiltrado = distribucionCompleta.filter(row => valoresX.includes(row.x));
+
+    if (dataSourceFiltrado.length === 0) {
+      return this.crearDistribucionPoissonVacia();
+    }
+
+    // Recalcular acumulada según el rango filtrado
+    let acumuladaFiltrada = 0;
+    for (let row of dataSourceFiltrado) {
+      acumuladaFiltrada += row.probabilidad;
+      row.acumulada = acumuladaFiltrada;
+      row.porcentajeAcumulado = acumuladaFiltrada * 100;
+    }
+
+    // Calcular estadísticos de Poisson
+    const media = lambda;
+    const desviacion = Math.sqrt(lambda);
+
+    const medianaEstimada = Math.floor(lambda + (1 / 3) - (0.02 / lambda));
+    let interpretacionSesgo = '';
+    if (media > medianaEstimada) {
+      interpretacionSesgo = 'Sesgo positivo (Media > Mediana)';
+    } else if (media < medianaEstimada) {
+      interpretacionSesgo = 'Sesgo negativo (Media < Mediana)';
+    } else {
+      interpretacionSesgo = 'Sesgo nulo (Media = Mediana)';
+    }
+
+    const curtosis = 1 / lambda;
+    let interpretacionCurtosis = '';
+    if (curtosis > 0) {
+      interpretacionCurtosis = 'Leptocúrtica';
+    } else if (curtosis < 0) {
+      interpretacionCurtosis = 'Platicúrtica';
+    } else {
+      interpretacionCurtosis = 'Mesocúrtica (Campana de Gauss)';
+    }
+
+    // Gráficas
+    const labels = dataSourceFiltrado.map(d => `x=${d.x}`);
+    const porcentajes = dataSourceFiltrado.map(d => +d.porcentaje.toFixed(4));
+    const porcentajesAcumulados = dataSourceFiltrado.map(d => +d.porcentajeAcumulado.toFixed(4));
+
+    const barChartData: ChartConfiguration<'bar'>['data'] = {
+      labels: labels,
+      datasets: [{
+        data: porcentajes,
+        label: 'P(x) %'
+      }]
+    };
+
+    const lineChartData: ChartConfiguration<'line'>['data'] = {
+      labels: labels,
+      datasets: [{
+        data: porcentajesAcumulados,
+        label: 'P(x) % acumulada',
+        fill: false,
+        pointRadius: 10,
+        pointHoverRadius: 14
+      }]
+    };
+
+    return {
+      dataSource: dataSourceFiltrado,
+      media,
+      desviacion,
+      sesgo: 0, // Poisson no calcula sesgo de la misma forma
+      interpretacionSesgo,
+      curtosis,
+      interpretacionCurtosis,
+      lambda,
+      barChartData,
+      lineChartData
+    };
+  }
+
+  private crearDistribucionPoissonVacia(): DistributionComparisonPoisson['poisson'] {
+    return {
+      dataSource: [],
+      media: 0,
+      desviacion: 0,
+      sesgo: 0,
+      interpretacionSesgo: '',
+      curtosis: 0,
+      interpretacionCurtosis: '',
+      lambda: 0,
       barChartData: { labels: [], datasets: [{ data: [], label: 'P(x) %' }] },
       lineChartData: { labels: [], datasets: [{ data: [], label: 'P(x) % acumulada', fill: false }] }
     };
@@ -961,5 +1143,13 @@ export class Binominal implements OnInit {
     let r = 1;
     for (let i = 2; i <= n; i++) r *= i;
     return r;
+  }
+
+  // Métodos para Poisson
+  private poisson(lambda: number, x: number): number {
+    // P(X=x) = (e^-λ * λ^x) / x!
+    const numerador = Math.exp(-lambda) * Math.pow(lambda, x);
+    const denominador = this.factorial(x);
+    return numerador / denominador;
   }
 }

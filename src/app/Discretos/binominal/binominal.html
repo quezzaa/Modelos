@@ -44,15 +44,15 @@
       <mat-error *ngIf="n <= 0">n debe ser mayor a 0</mat-error>
     </mat-form-field>
 
-    <!-- Campo p - Visible solo si se usa probabilidad -->
-    <mat-form-field appearance="outline" *ngIf="usarProbabilidad()" [style.opacity]="dataFromFile() ? 0.6 : 1">
+    <!-- Campo p - Visible para binomial en modo individual o comparación binomial-poisson/binomial-hipergeometrica -->
+    <mat-form-field appearance="outline" *ngIf="(usarProbabilidad() && !mostrarComparacion()) || (mostrarComparacion() && (tipoComparacion === 'binomial-poisson' || tipoComparacion === 'binomial-hipergeometrica'))" [style.opacity]="dataFromFile() ? 0.6 : 1">
       <mat-label>p (0 - 1)</mat-label>
       <input matInput type="number" step="0.10" [(ngModel)]="p" [disabled]="dataFromFile()">
       <mat-hint style="display: block; font-size: 16px; color: #666; margin-left: 24px;" *ngIf="dataFromFile()">Cargado del archivo</mat-hint>
     </mat-form-field>
 
-    <!-- Campo k - Visible solo si se usa k (hipergeométrica) -->
-    <mat-form-field appearance="outline" *ngIf="!usarProbabilidad() && !mostrarComparacion()" [style.opacity]="dataFromFile() ? 0.6 : 1">
+    <!-- Campo k - Visible para hipergeométrica en modo individual o comparación hipergeometrica-poisson/binomial-hipergeometrica -->
+    <mat-form-field appearance="outline" *ngIf="(!usarProbabilidad() && !mostrarComparacion()) || (mostrarComparacion() && (tipoComparacion === 'hipergeometrica-poisson' || tipoComparacion === 'binomial-hipergeometrica'))" [style.opacity]="dataFromFile() ? 0.6 : 1">
       <mat-label>k (éxitos en población)</mat-label>
       <input matInput type="number" [(ngModel)]="k" [disabled]="dataFromFile()">
       <mat-hint style="display: block; font-size: 16px; color: #666; margin-left: 24px;" *ngIf="dataFromFile()">Cargado del archivo</mat-hint>
@@ -93,9 +93,28 @@
         <strong>Modo Individual</strong> - Calcular una distribución
       </mat-radio-button>
       <mat-radio-button [value]="true">
-        <strong>Modo Comparación</strong> - Calcular Binomial + Hipergeométrica
+        <strong>Modo Comparación</strong> - Selecciona el tipo de comparación
       </mat-radio-button>
     </mat-radio-group>
+
+    <!-- Selector de tipo de comparación -->
+    <div *ngIf="mostrarComparacion()" style="margin-top: 20px; padding: 12px; background-color: #f3e5f5; border-left: 4px solid #9c27b0; border-radius: 4px;">
+      <p><strong style="color: #6a1b9a;">Tipo de Comparación:</strong></p>
+      <mat-radio-group [(ngModel)]="tipoComparacion" style="display: flex; flex-direction: column; gap: 12px;">
+        <mat-radio-button [value]="'binomial-hipergeometrica'">
+          <strong>Binomial vs Hipergeométrica</strong><br>
+          <span style="font-size: 12px; color: #666; margin-left: 24px;">Distribución clásica de probabilidad discreta</span>
+        </mat-radio-button>
+        <mat-radio-button [value]="'binomial-poisson'">
+          <strong>Binomial vs Poisson</strong><br>
+          <span style="font-size: 12px; color: #666; margin-left: 24px;">Poisson como aproximación a Binomial</span>
+        </mat-radio-button>
+        <mat-radio-button [value]="'hipergeometrica-poisson'">
+          <strong>Hipergeométrica vs Poisson</strong><br>
+          <span style="font-size: 12px; color: #666; margin-left: 24px;">Poisson como aproximación a Hipergeométrica</span>
+        </mat-radio-button>
+      </mat-radio-group>
+    </div>
 
     <!-- Selector de distribución individual -->
     <div *ngIf="!mostrarComparacion()" style="margin-top: 20px;">
@@ -119,7 +138,9 @@
     <!-- Nota para comparación -->
     <div *ngIf="mostrarComparacion()" style="margin-top: 12px; padding: 12px; background-color: #e3f2fd; border-left: 4px solid #2196f3; border-radius: 4px;">
       <strong style="color: #1976d2;">ℹ Modo Comparación:</strong>
-      <p style="margin: 8px 0 0 0; font-size: 14px;">Se calcularán <strong>ambas distribuciones</strong> (Binomial e Hipergeométrica) para poder observar la aproximación. Los valores p y k se cargarán automáticamente del archivo.</p>
+      <p *ngIf="tipoComparacion === 'binomial-hipergeometrica'" style="margin: 8px 0 0 0; font-size: 14px;">Se calcularán <strong>ambas distribuciones</strong> (Binomial e Hipergeométrica) para poder observar la aproximación. Los valores p y k se cargarán automáticamente del archivo.</p>
+      <p *ngIf="tipoComparacion === 'binomial-poisson'" style="margin: 8px 0 0 0; font-size: 14px;">Se calcularán <strong>Binomial y Poisson</strong> para observar cómo Poisson aproxima a Binomial cuando p es pequeño y n es grande.</p>
+      <p *ngIf="tipoComparacion === 'hipergeometrica-poisson'" style="margin: 8px 0 0 0; font-size: 14px;">Se calcularán <strong>Hipergeométrica y Poisson</strong> para observar cómo Poisson aproxima a Hipergeométrica en ciertos casos.</p>
     </div>
   </mat-card-content>
 </mat-card>
@@ -396,6 +417,186 @@
         <canvas
           baseChart
           [data]="datosComparacion.hipergeometrica.lineChartData"
+          [options]="lineChartOptions"
+          type="line">
+        </canvas>
+      </mat-card>
+    </div>
+
+  </div>
+</ng-container>
+
+<!-- ====== MODO COMPARACIÓN CON POISSON ====== -->
+<ng-container *ngIf="mostrarComparacion() && datosComparacionPoisson">
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+    
+    <!-- COLUMNA IZQUIERDA: BINOMIAL O HIPERGEOMÉTRICA -->
+    <div>
+      <mat-card>
+        <mat-card-title [style.color]="tipoComparacion === 'binomial-poisson' ? '#2196f3' : '#ff9800'">
+          <span *ngIf="tipoComparacion === 'binomial-poisson'">Distribución Binomial</span>
+          <span *ngIf="tipoComparacion === 'hipergeometrica-poisson'">Distribución Hipergeométrica</span>
+        </mat-card-title>
+        <mat-card-content>
+          <p *ngIf="tipoComparacion === 'binomial-poisson'">
+            <strong>Tipo:</strong> 
+            <span *ngIf="datosComparacionPoisson.distribucion1.tipoCalculoActual === 'infinita'">Población Infinita (n/N < 5%)</span>
+            <span *ngIf="datosComparacionPoisson.distribucion1.tipoCalculoActual === 'finita'">Población Finita (5% ≤ n/N < 20%)</span>
+          </p>
+          <p *ngIf="tipoComparacion === 'hipergeometrica-poisson'">
+            <strong>Tipo:</strong> Muestreo sin reemplazo
+          </p>
+          <p *ngIf="N > 0 && n > 0">
+            <strong>Porcentaje muestra:</strong> {{ (n/N*100) | number:'1.2-2' }}%
+          </p>
+          <p><strong>Media (μ):</strong> {{ datosComparacionPoisson.distribucion1.media | number:'1.2-2' }}</p>
+          <p><strong>Desviación (σ):</strong> {{ datosComparacionPoisson.distribucion1.desviacion | number:'1.4-4' }}</p>
+          <p *ngIf="datosComparacionPoisson.distribucion1.tipoCalculoActual === 'finita'">
+            <strong>Desviación Corregida (σ'):</strong> {{ datosComparacionPoisson.distribucion1.desviacionFinita | number:'1.4-4' }}<br>
+            <strong>Factor Corrección:</strong> {{ datosComparacionPoisson.distribucion1.factorCorreccion | number:'1.4-4' }}
+          </p>
+          <p>
+            <strong>Sesgo:</strong> {{ datosComparacionPoisson.distribucion1.sesgo | number:'1.4-4' }}<br>
+            <span style="font-size: 13px; color: #555;">{{ datosComparacionPoisson.distribucion1.interpretacionSesgo }}</span>
+          </p>
+          <p>
+            <strong>Curtosis:</strong> {{ datosComparacionPoisson.distribucion1.curtosis | number:'1.4-4' }}<br>
+            <span style="font-size: 13px; color: #555;">{{ datosComparacionPoisson.distribucion1.interpretacionCurtosis }}</span>
+          </p>
+        </mat-card-content>
+      </mat-card>
+
+      <br>
+
+      <mat-card>
+        <mat-card-title>
+          <span *ngIf="tipoComparacion === 'binomial-poisson'">Resultados Binomial</span>
+          <span *ngIf="tipoComparacion === 'hipergeometrica-poisson'">Resultados Hipergeométrica</span>
+        </mat-card-title>
+        <mat-card-content style="overflow-x: auto;">
+          <table mat-table [dataSource]="datosComparacionPoisson.distribucion1.dataSource" class="mat-elevation-z1" style="width: 100%; font-size: 12px;">
+            <ng-container matColumnDef="x">
+              <th mat-header-cell *matHeaderCellDef>x</th>
+              <td mat-cell *matCellDef="let e">{{ e.x }}</td>
+            </ng-container>
+            <ng-container matColumnDef="probabilidad">
+              <th mat-header-cell *matHeaderCellDef>P(x)</th>
+              <td mat-cell *matCellDef="let e">{{ e.probabilidad | number:'1.6-6' }}</td>
+            </ng-container>
+            <ng-container matColumnDef="porcentaje">
+              <th mat-header-cell *matHeaderCellDef>p%</th>
+              <td mat-cell *matCellDef="let e">{{ e.porcentaje | number:'1.6-6' }}%</td>
+            </ng-container>
+            <ng-container matColumnDef="porcentajeAcumulado">
+              <th mat-header-cell *matHeaderCellDef>p% Ac.</th>
+              <td mat-cell *matCellDef="let e">{{ e.porcentajeAcumulado | number:'1.6-6' }}%</td>
+            </ng-container>
+            <tr mat-header-row *matHeaderRowDef="['x', 'probabilidad', 'porcentaje', 'porcentajeAcumulado']"></tr>
+            <tr mat-row *matRowDef="let row; columns: ['x', 'probabilidad', 'porcentaje', 'porcentajeAcumulado'];"></tr>
+          </table>
+        </mat-card-content>
+      </mat-card>
+
+      <br>
+
+      <mat-card *ngIf="datosComparacionPoisson.distribucion1.dataSource.length">
+        <mat-card-title>
+          <span *ngIf="tipoComparacion === 'binomial-poisson'">Gráfica Binomial - P(x)%</span>
+          <span *ngIf="tipoComparacion === 'hipergeometrica-poisson'">Gráfica Hipergeométrica - P(x)%</span>
+        </mat-card-title>
+        <canvas
+          baseChart
+          [data]="datosComparacionPoisson.distribucion1.barChartData"
+          [options]="barChartOptions"
+          type="bar">
+        </canvas>
+      </mat-card>
+
+      <br>
+
+      <mat-card *ngIf="datosComparacionPoisson.distribucion1.dataSource.length">
+        <mat-card-title>
+          <span *ngIf="tipoComparacion === 'binomial-poisson'">Gráfica Binomial - P(x)% Acumulada</span>
+          <span *ngIf="tipoComparacion === 'hipergeometrica-poisson'">Gráfica Hipergeométrica - P(x)% Acumulada</span>
+        </mat-card-title>
+        <canvas
+          baseChart
+          [data]="datosComparacionPoisson.distribucion1.lineChartData"
+          [options]="lineChartOptions"
+          type="line">
+        </canvas>
+      </mat-card>
+    </div>
+
+    <!-- COLUMNA DERECHA: POISSON -->
+    <div>
+      <mat-card>
+        <mat-card-title style="color: #4caf50;">Distribución Poisson</mat-card-title>
+        <mat-card-content>
+          <p>
+            <strong>Tipo:</strong> Eventos raros e independientes
+          </p>
+          <p><strong>Parámetro λ (Lambda):</strong> {{ datosComparacionPoisson.poisson.lambda | number:'1.4-4' }}</p>
+          <p><strong>Media (μ):</strong> {{ datosComparacionPoisson.poisson.media | number:'1.2-2' }}</p>
+          <p><strong>Desviación (σ):</strong> {{ datosComparacionPoisson.poisson.desviacion | number:'1.4-4' }}</p>
+          <p>
+            <strong>Sesgo:</strong><br>
+            <span style="font-size: 13px; color: #555;">{{ datosComparacionPoisson.poisson.interpretacionSesgo }}</span>
+          </p>
+          <p>
+            <strong>Curtosis:</strong> {{ datosComparacionPoisson.poisson.curtosis | number:'1.4-4' }}<br>
+            <span style="font-size: 13px; color: #555;">{{ datosComparacionPoisson.poisson.interpretacionCurtosis }}</span>
+          </p>
+        </mat-card-content>
+      </mat-card>
+
+      <br>
+
+      <mat-card>
+        <mat-card-title>Resultados Poisson</mat-card-title>
+        <mat-card-content style="overflow-x: auto;">
+          <table mat-table [dataSource]="datosComparacionPoisson.poisson.dataSource" class="mat-elevation-z1" style="width: 100%; font-size: 12px;">
+            <ng-container matColumnDef="x">
+              <th mat-header-cell *matHeaderCellDef>x</th>
+              <td mat-cell *matCellDef="let e">{{ e.x }}</td>
+            </ng-container>
+            <ng-container matColumnDef="probabilidad">
+              <th mat-header-cell *matHeaderCellDef>P(x)</th>
+              <td mat-cell *matCellDef="let e">{{ e.probabilidad | number:'1.6-6' }}</td>
+            </ng-container>
+            <ng-container matColumnDef="porcentaje">
+              <th mat-header-cell *matHeaderCellDef>p%</th>
+              <td mat-cell *matCellDef="let e">{{ e.porcentaje | number:'1.6-6' }}%</td>
+            </ng-container>
+            <ng-container matColumnDef="porcentajeAcumulado">
+              <th mat-header-cell *matHeaderCellDef>p% Ac.</th>
+              <td mat-cell *matCellDef="let e">{{ e.porcentajeAcumulado | number:'1.6-6' }}%</td>
+            </ng-container>
+            <tr mat-header-row *matHeaderRowDef="['x', 'probabilidad', 'porcentaje', 'porcentajeAcumulado']"></tr>
+            <tr mat-row *matRowDef="let row; columns: ['x', 'probabilidad', 'porcentaje', 'porcentajeAcumulado'];"></tr>
+          </table>
+        </mat-card-content>
+      </mat-card>
+
+      <br>
+
+      <mat-card *ngIf="datosComparacionPoisson.poisson.dataSource.length">
+        <mat-card-title>Gráfica Poisson - P(x)%</mat-card-title>
+        <canvas
+          baseChart
+          [data]="datosComparacionPoisson.poisson.barChartData"
+          [options]="barChartOptions"
+          type="bar">
+        </canvas>
+      </mat-card>
+
+      <br>
+
+      <mat-card *ngIf="datosComparacionPoisson.poisson.dataSource.length">
+        <mat-card-title>Gráfica Poisson - P(x)% Acumulada</mat-card-title>
+        <canvas
+          baseChart
+          [data]="datosComparacionPoisson.poisson.lineChartData"
           [options]="lineChartOptions"
           type="line">
         </canvas>

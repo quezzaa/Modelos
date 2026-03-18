@@ -66,6 +66,13 @@ export class Poisson implements OnInit {
   curtosis = 0;
   interpretacionCurtosis = '';
 
+  // Tolerancia e Intervalo de Confianza
+  tolerancia = 0; // Margen de error (σ)
+  nivelConfianza = 0.95; // 95% por defecto
+  limiteInferior = 0; // λ - z*σ
+  limiteSuperior = 0; // λ + z*σ
+  errorEstandar = 0; // σ/√n (si aplica)
+
   // Mensaje de validación para x
   xValido = true;
   xMensaje = '';
@@ -294,6 +301,36 @@ export class Poisson implements OnInit {
     } else {
       this.interpretacionCurtosis = 'Mesocúrtica (Campana de Gauss)';
     }
+
+    // Calcular tolerancia e intervalo de confianza
+    this.calcularToleranciaIntervalos();
+  }
+
+  private calcularToleranciaIntervalos() {
+    // Tolerancia: desviación estándar
+    this.tolerancia = this.desviacion;
+
+    // Error estándar (si n y p están disponibles)
+    if (this.n > 0 && this.p > 0) {
+      this.errorEstandar = this.desviacion / Math.sqrt(this.n);
+    } else {
+      this.errorEstandar = this.desviacion;
+    }
+
+    // Valor Z para 95% de confianza (aproximadamente 1.96)
+    // Para 99% sería 2.576, para 90% sería 1.645
+    const valoresZ: { [key: number]: number } = {
+      0.90: 1.645,
+      0.95: 1.960,
+      0.99: 2.576
+    };
+
+    const z = valoresZ[this.nivelConfianza] || 1.960;
+
+    // Intervalo de confianza para λ usando método Score de Wilson aproximado
+    // Intervalo simple: λ ± z*√λ
+    this.limiteInferior = Math.max(0, this.lambda - z * this.desviacion);
+    this.limiteSuperior = this.lambda + z * this.desviacion;
   }
 
   private parseXRango(): number[] {

@@ -1,118 +1,269 @@
-<body>
-    <mat-card>
-        <h1>Lectura de Archivos</h1>
-        <p>Carga tu archivo (CSV, XLSX o XLS)</p>
-        
-        <div class="button-container">
-            <button mat-raised-button color="primary" (click)="fileInput.click()">
-                <mat-icon>upload_file</mat-icon>
-                Seleccionar archivo
-            </button>
-            <input #fileInput type="file" hidden (change)="Lector($event)" accept=".csv,.xlsx,.xls" />
-            <span *ngIf="fileName()" class="file-name">{{ fileName() }}</span>
-        </div>
+<mat-card>
+    <h1>Lectura de Archivos</h1>
+    <p>Carga tu archivo (CSV, XLSX o XLS) o selecciona una simulación desde Supabase</p>
 
-        <!-- Selectores de Columnas -->
-        <div *ngIf="showColumnSelectors()" class="column-selectors">
-            <h2>Selecciona las columnas</h2>
-            <div class="selector-row">
-                <mat-form-field>
-                    <mat-label>Columna para N (Tamaño de muestra)</mat-label>
-                    <mat-select [(ngModel)]="selectedNColumn" (selectionChange)="selectedNColumn.set($event.value)">
-                        <mat-option *ngFor="let col of availableColumns()" [value]="col">
-                            {{ col }}
-                        </mat-option>
-                    </mat-select>
-                </mat-form-field>
+    <!-- ========================= -->
+    <!-- SELECTOR DE SUPABASE -->
+    <!-- ========================= -->
+    <div class="simulation-selectors">
+        <h2>Seleccionar Simulación de Supabase</h2>
 
-                <mat-form-field>
-                    <mat-label>Columna para K (Estados/Éxitos)</mat-label>
-                    <mat-select [(ngModel)]="selectedKColumn" (selectionChange)="selectedKColumn.set($event.value)">
-                        <mat-option *ngFor="let col of availableColumns()" [value]="col">
-                            {{ col }}
-                        </mat-option>
-                    </mat-select>
-                </mat-form-field>
+        <div class="selector-row">
+            <!-- Simulación -->
+            <mat-form-field appearance="outline">
+                <mat-label>Simulación</mat-label>
+                <mat-select
+                    [ngModel]="selectedSimulationId()"
+                    (ngModelChange)="selectedSimulationId.set($event)"
+                >
+                    <mat-option
+                        *ngFor="let sim of simulations()"
+                        [value]="sim.idSimulacion"
+                    >
+                        ID: {{ sim.idSimulacion }} |
+                        {{ sim.fecha | date:'short' }} |
+                        {{ sim.tipoSimulacion }}
+                    </mat-option>
+                </mat-select>
+            </mat-form-field>
 
-                <button mat-raised-button color="accent" (click)="onColumnsSelected()">
-                    <mat-icon>check</mat-icon>
-                    Siguiente
-                </button>
-            </div>
-        </div>
+            <!-- Escenario -->
+            <mat-form-field appearance="outline">
+                <mat-label>Escenario</mat-label>
+                <mat-select
+                    [ngModel]="selectedScenario()"
+                    (ngModelChange)="selectedScenario.set($event)"
+                >
+                    <mat-option [value]="1">Escenario 1</mat-option>
+                    <mat-option [value]="2">Escenario 2</mat-option>
+                    <mat-option [value]="3">Escenario 3</mat-option>
+                </mat-select>
+            </mat-form-field>
 
-        <!-- Selector de Estado de K -->
-        <div *ngIf="showStateSelector() && !showProcessedResult()" class="state-selector">
-            <h2>Selecciona el estado de K a contar</h2>
-            <p style="font-size: 12px; color: #666;">Se encontraron {{ availableKStates().length }} estados únicos</p>
-            <div class="selector-row">
-                <mat-form-field>
-                    <mat-label>Estados de K disponibles</mat-label>
-                    <mat-select [ngModel]="selectedKState()" (ngModelChange)="selectedKState.set($event)">
-                        <mat-option *ngFor="let state of availableKStates()" [value]="state">
-                            {{ state }}
-                        </mat-option>
-                    </mat-select>
-                </mat-form-field>
-
-                <button mat-raised-button color="accent" (click)="onStateSelected()">
-                    <mat-icon>check</mat-icon>
-                    Confirmar
-                </button>
-            </div>
-        </div>
-
-        <!-- Tabla de datos -->
-        <div *ngIf="tableData().length > 0" class="content-container">
-            <h2>Datos del Archivo:</h2>
-            <table mat-table [dataSource]="tableData()" class="mat-elevation-z8">
-                <ng-container *ngFor="let col of displayedColumns" [matColumnDef]="col">
-                    <th mat-header-cell *matHeaderCellDef>{{ col }}</th>
-                    <td mat-cell *matCellDef="let element">{{ element[col] }}</td>
-                </ng-container>
-
-                <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-            </table>
-        </div>
-
-        <!-- Resultado procesado -->
-        <div *ngIf="showProcessedResult()" class="result-container">
-            <h2>Datos Procesados</h2>
-            <div class="result-box">
-                <p><strong>N (Tamaño de muestra):</strong> {{ processedN() }}</p>
-                <p><strong>K (Éxitos para estado "{{ selectedKState() }}"):</strong> {{ processedK() }}</p>
-                <p *ngIf="distributionType() === 'binomial'" style="color: #2196f3;">
-                    <strong>p (Probabilidad calculada):</strong> {{ (processedK() / processedN()) | number:'1.4-4' }}
-                </p>
-            </div>
-
-            <!-- Selector de Tipo de Distribución -->
-            <div class="distribution-selector">
-                <h3>Tipo de Distribución</h3>
-                <mat-radio-group [ngModel]="distributionType()" (ngModelChange)="distributionType.set($event)">
-                    <mat-radio-button [value]="'binomial'" style="display: block; margin: 10px 0;">
-                        <strong>Binomial</strong> - Usa p = K/N calculado automáticamente
-                    </mat-radio-button>
-                    <mat-radio-button [value]="'hipergeometrica'" style="display: block; margin: 10px 0;">
-                        <strong>Hipergeométrica</strong> - Usa K como éxitos en población
-                    </mat-radio-button>
-                </mat-radio-group>
-            </div>
-
-            <button mat-raised-button color="success" (click)="sendToBinomial()">
-                <mat-icon>send</mat-icon>
-                Enviar a Distribuciones
+            <!-- Botón cargar -->
+            <button
+                mat-raised-button
+                color="primary"
+                (click)="loadSimulationScenario()"
+            >
+                <mat-icon>cloud_download</mat-icon>
+                Cargar Simulación
             </button>
         </div>
-    </mat-card>
-    <br>
-    <br>
-    <br>
-    <br>
-    <br>
-    <br>
-    <br>
-    <br>
-</body>
+    </div>
 
+    <hr />
+
+    <!-- ========================= -->
+    <!-- CARGA LOCAL DE ARCHIVO -->
+    <!-- ========================= -->
+    <div class="button-container">
+        <button mat-raised-button color="primary" (click)="fileInput.click()">
+            <mat-icon>upload_file</mat-icon>
+            Seleccionar archivo
+        </button>
+
+        <input
+            #fileInput
+            type="file"
+            hidden
+            (change)="Lector($event)"
+            accept=".csv,.xlsx,.xls"
+        />
+
+        <span *ngIf="fileName()" class="file-name">
+            {{ fileName() }}
+        </span>
+    </div>
+
+    <!-- ========================= -->
+    <!-- SELECTORES DE COLUMNAS -->
+    <!-- ========================= -->
+    <div *ngIf="showColumnSelectors()" class="column-selectors">
+        <h2>Selecciona las columnas</h2>
+
+        <div class="selector-row">
+            <!-- N -->
+            <mat-form-field appearance="outline">
+                <mat-label>Columna para N (Tamaño de muestra)</mat-label>
+                <mat-select
+                    [ngModel]="selectedNColumn()"
+                    (ngModelChange)="selectedNColumn.set($event)"
+                >
+                    <mat-option
+                        *ngFor="let col of availableColumns()"
+                        [value]="col"
+                    >
+                        {{ col }}
+                    </mat-option>
+                </mat-select>
+            </mat-form-field>
+
+            <!-- K -->
+            <mat-form-field appearance="outline">
+                <mat-label>Columna para K (Estados/Éxitos)</mat-label>
+                <mat-select
+                    [ngModel]="selectedKColumn()"
+                    (ngModelChange)="selectedKColumn.set($event)"
+                >
+                    <mat-option
+                        *ngFor="let col of availableColumns()"
+                        [value]="col"
+                    >
+                        {{ col }}
+                    </mat-option>
+                </mat-select>
+            </mat-form-field>
+
+            <!-- Botón -->
+            <button
+                mat-raised-button
+                color="accent"
+                (click)="onColumnsSelected()"
+            >
+                <mat-icon>check</mat-icon>
+                Siguiente
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================= -->
+    <!-- SELECTOR DE ESTADO K -->
+    <!-- ========================= -->
+    <div
+        *ngIf="showStateSelector() && !showProcessedResult()"
+        class="state-selector"
+    >
+        <h2>Selecciona el estado de K a contar</h2>
+
+        <p style="font-size: 12px; color: #666;">
+            Se encontraron {{ availableKStates().length }} estados únicos
+        </p>
+
+        <div class="selector-row">
+            <mat-form-field appearance="outline">
+                <mat-label>Estados de K disponibles</mat-label>
+                <mat-select
+                    [ngModel]="selectedKState()"
+                    (ngModelChange)="selectedKState.set($event)"
+                >
+                    <mat-option
+                        *ngFor="let state of availableKStates()"
+                        [value]="state"
+                    >
+                        {{ state }}
+                    </mat-option>
+                </mat-select>
+            </mat-form-field>
+
+            <button
+                mat-raised-button
+                color="accent"
+                (click)="onStateSelected()"
+            >
+                <mat-icon>check</mat-icon>
+                Confirmar
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================= -->
+    <!-- TABLA -->
+    <!-- ========================= -->
+    <div *ngIf="tableData().length > 0" class="content-container">
+        <h2>Datos del Archivo / Simulación:</h2>
+
+        <table
+            mat-table
+            [dataSource]="tableData()"
+            class="mat-elevation-z8"
+        >
+            <ng-container
+                *ngFor="let col of displayedColumns"
+                [matColumnDef]="col"
+            >
+                <th mat-header-cell *matHeaderCellDef>
+                    {{ col }}
+                </th>
+
+                <td mat-cell *matCellDef="let element">
+                    {{ element[col] }}
+                </td>
+            </ng-container>
+
+            <tr
+                mat-header-row
+                *matHeaderRowDef="displayedColumns"
+            ></tr>
+
+            <tr
+                mat-row
+                *matRowDef="let row; columns: displayedColumns;"
+            ></tr>
+        </table>
+    </div>
+
+    <!-- ========================= -->
+    <!-- RESULTADO -->
+    <!-- ========================= -->
+    <div *ngIf="showProcessedResult()" class="result-container">
+        <h2>Datos Procesados</h2>
+
+        <div class="result-box">
+            <p>
+                <strong>N (Tamaño de muestra):</strong>
+                {{ processedN() }}
+            </p>
+
+            <p>
+                <strong>
+                    K (Éxitos para estado "{{ selectedKState() }}"):
+                </strong>
+                {{ processedK() }}
+            </p>
+
+            <p
+                *ngIf="distributionType() === 'binomial'"
+                style="color: #2196f3;"
+            >
+                <strong>p (Probabilidad calculada):</strong>
+                {{ (processedK() / processedN()) | number:'1.4-4' }}
+            </p>
+        </div>
+
+        <!-- Tipo de distribución -->
+        <div class="distribution-selector">
+            <h3>Tipo de Distribución</h3>
+
+            <mat-radio-group
+                [ngModel]="distributionType()"
+                (ngModelChange)="distributionType.set($event)"
+            >
+                <mat-radio-button
+                    [value]="'binomial'"
+                    style="display: block; margin: 10px 0;"
+                >
+                    <strong>Binomial</strong> - Usa p = K/N calculado automáticamente
+                </mat-radio-button>
+
+                <mat-radio-button
+                    [value]="'hipergeometrica'"
+                    style="display: block; margin: 10px 0;"
+                >
+                    <strong>Hipergeométrica</strong> - Usa K como éxitos en población
+                </mat-radio-button>
+            </mat-radio-group>
+        </div>
+
+        <!-- Enviar -->
+        <button
+            mat-raised-button
+            color="primary"
+            (click)="sendToBinomial()"
+        >
+            <mat-icon>send</mat-icon>
+            Enviar a Distribuciones
+        </button>
+    </div>
+</mat-card>
+```

@@ -1,10 +1,10 @@
-import { Component, signal, inject } from '@angular/core';
+import { Component, signal, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatCard, MatCardModule } from '@angular/material/card';
+import { MatCardModule } from '@angular/material/card';
 import { MatTableModule } from '@angular/material/table';
 import { MatSelectModule } from '@angular/material/select';
 import { MatRadioModule } from '@angular/material/radio';
@@ -12,6 +12,7 @@ import { FormsModule } from '@angular/forms';
 import * as XLSX from 'xlsx';
 import { FileDataService } from '../../Services/file-data.service';
 import { Router } from '@angular/router';
+import { Simulation } from '../../Services/simulation';
 
 export interface FilaData {
   [key: string]: any;
@@ -19,7 +20,9 @@ export interface FilaData {
 
 @Component({
   selector: 'app-archivos',
-  imports: [CommonModule,
+  standalone: true,
+  imports: [
+    CommonModule,
     MatFormFieldModule,
     MatInputModule,
     MatButtonModule,
@@ -33,47 +36,105 @@ export interface FilaData {
   templateUrl: './archivos.html',
   styleUrl: './archivos.css',
 })
-export class Archivos {
+export class Archivos implements OnInit {
+
   private fileDataService = inject(FileDataService);
   private router = inject(Router);
+  private simulationService = inject(Simulation);
+
   fileContent = signal('');
   fileName = signal('');
   tableData = signal<FilaData[]>([]);
   displayedColumns: string[] = [];
   availableColumns = signal<string[]>([]);
-  
-  // Selectores de columnas
+
+  // Supabase
+  simulations = signal<any[]>([]);
+  selectedSimulationId = signal<number | null>(null);
+  selectedScenario = signal<number>(1);
+
+  // Selectores
   selectedNColumn = signal<string | null>(null);
   selectedKColumn = signal<string | null>(null);
   selectedKState = signal<string>('');
   distributionType = signal<'binomial' | 'hipergeometrica'>('binomial');
-  
-  // Estados únicos de K disponibles
+
   availableKStates = signal<string[]>([]);
-  
-  // Datos procesados finales
+
   processedN = signal(0);
   processedK = signal(0);
   processedP = signal(0);
+
   showColumnSelectors = signal(false);
   showStateSelector = signal(false);
   showProcessedResult = signal(false);
 
+  async ngOnInit(): Promise<void> {
+    await this.loadSimulations();
+  }
+
+  async loadSimulations(): Promise<void> {
+    try {
+      const data = await this.simulationService.getSimulaciones();
+      this.simulations.set(data || []);
+    } catch (error) {
+      console.error('Error cargando simulaciones:', error);
+    }
+  }
+
+  async loadSimulationScenario(): Promise<void> {
+    const simulationId = this.selectedSimulationId();
+    const scenario = this.selectedScenario();
+
+    if (!simulationId) {
+      alert('Seleccione una simulación');
+      return;
+    }
+
+    try {
+      const data = await this.simulationService.getEscenario(simulationId, scenario);
+
+      if (!data || data.length === 0) {
+        alert('No hay datos para esta simulación/escenario');
+        return;
+      }
+
+      this.tableData.set(data);
+
+      const headers = Object.keys(data[0]);
+      this.displayedColumns = headers;
+      this.availableColumns.set(headers);
+
+      this.showColumnSelectors.set(true);
+
+      this.fileName.set(`Simulación ${simulationId} - Escenario ${scenario}`);
+
+      this.showStateSelector.set(false);
+      this.showProcessedResult.set(false);
+      this.selectedNColumn.set(null);
+      this.selectedKColumn.set(null);
+      this.selectedKState.set('');
+
+    } catch (error) {
+      console.error('Error cargando escenario:', error);
+    }
+  }
+
+  // =========================
+  // TU LÓGICA ORIGINAL
+  // =========================
+
   Lector(event: any): void {
     const file: File = event.target.files[0];
-    if (file) {
-      this.fileName.set(file.name);
-      const fileExtension = file.name.split('.').pop()?.toLowerCase();
-      
-      if (fileExtension === 'csv') {
-        this.leerCSV(file);
-      } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
-        this.leerExcel(file);
-      } else {
-        console.error('Archivo no soportado. Por favor, seleccione un archivo .csv, .xlsx o .xls.');
-      }
-    } else {
-      console.error('No se seleccionó ningún archivo.');
+    if (!file) return;
+
+    this.fileName.set(file.name);
+    const ext = file.name.split('.').pop()?.toLowerCase();
+
+    if (ext === 'csv') {
+      this.leerCSV(file);
+    } else if (ext === 'xlsx' || ext === 'xls') {
+      this.leerExcel(file);
     }
   }
 
@@ -83,7 +144,7 @@ export class Archivos {
       const content = e.target?.result as string;
       this.fileContent.set(content);
       this.procesarDatos(content);
-    }
+    };
     reader.readAsText(file);
   }
 
@@ -96,7 +157,7 @@ export class Archivos {
       const content = XLSX.utils.sheet_to_csv(firstSheet);
       this.fileContent.set(content);
       this.procesarDatos(content);
-    }
+    };
     reader.readAsArrayBuffer(file);
   }
 
@@ -105,29 +166,29 @@ export class Archivos {
     const datos: FilaData[] = [];
     let headers: string[] = [];
 
-    // Detectar si la primera línea es encabezado
     let inicio = 0;
+
     if (lineas.length > 0) {
       const primeraLinea = lineas[0].split(',').map(col => col.trim());
       headers = primeraLinea;
-      
-      // Verificar si es un encabezado (si la primera columna no es un número)
+
       if (isNaN(parseInt(primeraLinea[0], 10))) {
         inicio = 1;
       } else {
-        // Si no es encabezado, crear nombres genéricos
         headers = primeraLinea.map((_, i) => `Columna ${i + 1}`);
       }
     }
 
-    // Procesar filas de datos
     for (let i = inicio; i < lineas.length; i++) {
       const columnas = lineas[i].split(',').map(col => col.trim());
+
       if (columnas.length > 0 && columnas[0]) {
         const fila: FilaData = {};
+
         headers.forEach((header, index) => {
           fila[header] = columnas[index] || '';
         });
+
         datos.push(fila);
       }
     }
@@ -136,9 +197,10 @@ export class Archivos {
     this.displayedColumns = headers;
     this.availableColumns.set(headers);
     this.showColumnSelectors.set(true);
-    console.log('Datos procesados:', datos);
-    console.log('Columnas disponibles:', headers);
   }
+
+  // PEGA ESTOS 3 MÉTODOS DENTRO DE TU CLASE Archivos
+  // (seguramente desaparecieron o quedaron fuera de la clase al integrar Supabase)
 
   onColumnsSelected(): void {
     const nCol = this.selectedNColumn();
@@ -150,27 +212,32 @@ export class Archivos {
     }
 
     const data = this.tableData();
-    
-    // Calcular N: cantidad de filas en la columna N (usando length, no contando valores)
-    const nValues = data.map(row => row[nCol]).filter(val => val !== undefined && val !== '');
+
+    // N = total de filas válidas de la columna seleccionada
+    const nValues = data
+      .map(row => row[nCol])
+      .filter(val => val !== undefined && val !== null && val !== '');
+
     const N = nValues.length;
 
-    // Obtener y agrupar estados de K
+    // Estados únicos de K
     const kValues = data
-      .filter(row => row[kCol] !== undefined && row[kCol] !== '')
+      .filter(row => row[kCol] !== undefined && row[kCol] !== null && row[kCol] !== '')
       .map(row => row[kCol].toString().toLowerCase().trim());
-    
+
     const uniqueKStates = Array.from(new Set(kValues));
-    
-    console.log('Estados únicos de K:', uniqueKStates);
-    console.log('Total de estados:', uniqueKStates.length);
 
     this.processedN.set(N);
     this.availableKStates.set(uniqueKStates);
+
+    // Mostrar siguiente paso
     this.showStateSelector.set(true);
+    this.showProcessedResult.set(false);
 
     console.log('N (filas):', N);
+    console.log('Estados únicos K:', uniqueKStates);
   }
+
 
   onStateSelected(): void {
     const selectedState = this.selectedKState();
@@ -182,19 +249,23 @@ export class Archivos {
     }
 
     const data = this.tableData();
-    
-    // Contar cuántas veces aparece el estado seleccionado
+
     const kValues = data
-      .filter(row => row[kCol] !== undefined && row[kCol] !== '')
+      .filter(row => row[kCol] !== undefined && row[kCol] !== null && row[kCol] !== '')
       .map(row => row[kCol].toString().toLowerCase().trim());
-    
+
+    // Conteo de éxitos
     const K = kValues.filter(val => val === selectedState).length;
 
     this.processedK.set(K);
+    this.processedP.set(this.processedN() > 0 ? K / this.processedN() : 0);
+
     this.showProcessedResult.set(true);
 
-    console.log('Estado K seleccionado:', selectedState, 'Cantidad:', K);
+    console.log('Estado seleccionado:', selectedState);
+    console.log('K:', K);
   }
+
 
   sendToBinomial(): void {
     const N = this.processedN();
@@ -207,7 +278,6 @@ export class Archivos {
       return;
     }
 
-    // Enviar AMBOS p y K para permitir cambios entre distribuciones
     const p = K / N;
 
     this.fileDataService.setFileData({
@@ -218,9 +288,13 @@ export class Archivos {
       selectedKState: this.selectedKState() || undefined
     });
 
-    console.log('Datos enviados al servicio:', { N, K, p, distributionType: type });
-    
-    // Navegar a la ruta correcta
+    console.log('Datos enviados:', {
+      N,
+      K,
+      p,
+      distributionType: type
+    });
+
     this.router.navigate(['/discretos/binominal']);
   }
 }

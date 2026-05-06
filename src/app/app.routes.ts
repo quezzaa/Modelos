@@ -32,5 +32,10 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./Discretos/poisson/poisson')
         .then(p => p.Poisson)
-  }
+  },
+  { path: 'discretos/colas',
+    loadComponent: () =>
+      import('./Discretos/colas/colas')
+        .then(c => c.Colas)
+  },
 ];

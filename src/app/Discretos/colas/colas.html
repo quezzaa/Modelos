@@ -1,0 +1,93 @@
+<body>
+    <mat-card>
+        <mat-card-title>Distribución de Probabilidad de Poisson</mat-card-title>
+        <br>
+
+        <mat-card-content class="form">
+            <!-- Campo n - Para validación (deshabilitado si viene del archivo) -->
+            <mat-form-field appearance="outline">
+                <mat-label>λ - lambda (taza de llegada)</mat-label>
+                <input matInput type="number" [(ngModel)]="lambda">
+            </mat-form-field>
+
+            <!-- Campo p - Para validación (deshabilitado si viene del archivo) -->
+            <mat-form-field appearance="outline">
+                <mat-label>miu (taza de servicio)</mat-label>
+                <input matInput type="number" step="0.01" [(ngModel)]="miu">
+            </mat-form-field>
+
+            <!-- Campo x - Required -->
+            <mat-form-field appearance="outline">
+                <mat-label>Pn (probabilidad deseada)</mat-label>
+                <input matInput placeholder='Ej: "5", "0", "3"...' [(ngModel)]="n">
+            </mat-form-field>
+
+            <button mat-raised-button color="primary" (click)="calcular()">
+                Calcular
+            </button>
+        </mat-card-content>
+    </mat-card>
+    <br>
+
+    <!-- ====== ESTADÍSTICOS ====== -->
+    <mat-card *ngIf="dataSource.length > 0">
+        <mat-card-title>Estadísticos</mat-card-title>
+        <p>
+            <strong>Valor de n para Pn calculado:</strong> {{ n }}
+        </p>
+        <p><strong>Lambda (λ): </strong> {{ lambda | number:'1.4-4' }}</p>
+        <p><strong>Miu (μ):</strong> {{ miu | number:'1.4-4' }}</p>
+        <p>
+            <strong>Lq (Número promedio de clientes en la cola): </strong> {{ dataSource[0].Lq | number:'1.4-4' }}<br>
+        </p>
+        <p>
+            <strong>Ls (Número promedio de clientes en el sistema): </strong> {{ dataSource[0].Ls | number:'1.4-4' }}<br>
+        </p>
+        <p>
+            <strong>Wq (Tiempo promedio en cola): </strong> {{ dataSource[0].Wq | number:'1.4-4' }}<br>
+        </p>
+        <p>
+            <strong>Ws (Tiempo promedio en el sistema): </strong> {{ dataSource[0].Ws | number:'1.4-4' }}<br>
+        </p>
+        <p>
+            <strong>ρ (Utilización): </strong> {{ dataSource[0].ps | number:'1.4-4' }}<br>
+        </p>
+        <p>
+            <strong>P0 (Probabilidad de que no haya clientes en el sistema): </strong> {{ dataSource[0].P0 | number:'1.4-4' }}<br>
+        </p>
+        <p>
+            <strong>P(n={{ n }}) (Probabilidad de que haya n clientes en el sistema): </strong> {{ dataSource[0].Pn | number:'1.4-4' }}<br>
+        </p>
+    </mat-card>
+    <br>
+
+    <!-- ====== GRÁFICAS ====== -->
+    <!-- GRÁFICA 1: Distribución de Probabilidades Pn -->
+    <mat-card *ngIf="dataSource.length > 0">
+        <mat-card-title>Gráfica 1: Distribución de Probabilidades P(n)</mat-card-title>
+        <p><small>Probabilidad de tener n clientes en el sistema (n = 0 a 10)</small></p>
+        <canvas
+            baseChart
+            [data]="pnChartData"
+            [options]="pnChartOptions"
+            type="bar">
+        </canvas>
+    </mat-card>
+
+    <br>
+
+    <!-- GRÁFICA 2: Comparación Lq vs Ls -->
+    <mat-card *ngIf="dataSource.length > 0">
+        <mat-card-title>Gráfica 2: Comparación Lq vs Ls</mat-card-title>
+        <p><small>Número promedio de clientes en la cola (Lq) vs en el sistema (Ls)</small></p>
+        <canvas
+            baseChart
+            [data]="lsLqChartData"
+            [options]="lsLqChartOptions"
+            type="bar">
+        </canvas>
+    </mat-card>
+    <br>
+    <br>
+    <br>
+</body>

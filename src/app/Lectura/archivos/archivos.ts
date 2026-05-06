@@ -333,10 +333,7 @@ export class Archivos implements OnInit {
     return 0;
   }
 
-  /**
-   * Calcula lambda (λ) - tasa de llegada de órdenes
-   * λ = número de órdenes / tiempo total de operación en horas
-   */
+
   private calculateLambda(): number {
   const data = this.tableData();
   if (data.length === 0) return 0;
@@ -357,8 +354,6 @@ export class Archivos implements OnInit {
     return 0;
   }
 
-  // Detectar jornadas:
-  // Cada no_orden = 1 inicia un nuevo día
   const totalDays = data.filter(row => Number(row['no_orden']) === 1).length;
 
   if (totalDays === 0) {
@@ -366,17 +361,15 @@ export class Archivos implements OnInit {
     return 0;
   }
 
-  // Horas por jornada
+
   const hoursPerDay = simulation.horas / totalDays;
 
-  // Agrupar clientes por jornada
   const dailyCounts: number[] = [];
   let currentDayCount = 0;
 
   data.forEach((row, index) => {
     const noOrden = Number(row['no_orden']);
 
-    // Nuevo día (excepto primera fila)
     if (noOrden === 1 && index !== 0) {
       dailyCounts.push(currentDayCount);
       currentDayCount = 0;
@@ -385,19 +378,17 @@ export class Archivos implements OnInit {
     currentDayCount++;
   });
 
-  // Último día
+
   if (currentDayCount > 0) {
     dailyCounts.push(currentDayCount);
   }
 
   if (dailyCounts.length === 0) return 0;
 
-  // λ por día (clientes/hora)
   const dailyLambdas = dailyCounts.map(
     clients => clients / hoursPerDay
   );
 
-  // Promedio final
   const lambda =
     dailyLambdas.reduce((sum, val) => sum + val, 0) / dailyLambdas.length;
 
@@ -408,10 +399,6 @@ export class Archivos implements OnInit {
   return lambda;
 }
 
-  /**
-   * Calcula miu (μ) - tasa de servicio
-   * μ = capacidad de servicio = 3600 segundos / promedio de tiempo de servicio
-   */
   private calculateMiu(): number {
   const data = this.tableData();
   if (data.length === 0) return 0;

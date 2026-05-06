@@ -69,6 +69,10 @@ export class Archivos implements OnInit {
   showStateSelector = signal(false);
   showProcessedResult = signal(false);
 
+  calculatedLambda = signal(0);
+  calculatedMiu = signal(0);
+  showColaDialog = signal(false);
+
   async ngOnInit(): Promise<void> {
     await this.loadSimulations();
   }
@@ -93,7 +97,7 @@ export class Archivos implements OnInit {
 
     try {
       const data = await this.simulationService.getEscenario(simulationId, scenario);
-
+      console.log(data)
       if (!data || data.length === 0) {
         alert('No hay datos para esta simulación/escenario');
         return;
@@ -296,5 +300,195 @@ export class Archivos implements OnInit {
     });
 
     this.router.navigate(['/discretos/binominal']);
+  }
+
+  // ===========================
+  // MÉTODOS PARA COLAS
+  // ===========================
+
+  /**
+   * Convierte tiempo en formato HH:MM:SS a segundos
+   * @param timeStr Cadena en formato "HH:MM:SS"
+   * @returns Tiempo en segundos
+   */
+  private timeToSeconds(timeStr: string | number): number {
+    if (typeof timeStr === 'number') return timeStr;
+    
+    const str = String(timeStr).trim();
+    if (!str) return 0;
+
+    const parts = str.split(':');
+    if (parts.length === 3) {
+      // Formato HH:MM:SS
+      const hours = parseInt(parts[0], 10) || 0;
+      const minutes = parseInt(parts[1], 10) || 0;
+      const seconds = parseInt(parts[2], 10) || 0;
+      return hours * 3600 + minutes * 60 + seconds;
+    } else if (parts.length === 2) {
+      // Formato MM:SS (retrocompatibilidad)
+      const minutes = parseInt(parts[0], 10) || 0;
+      const seconds = parseInt(parts[1], 10) || 0;
+      return minutes * 60 + seconds;
+    }
+    return 0;
+  }
+
+  /**
+   * Calcula lambda (λ) - tasa de llegada de órdenes
+   * λ = número de órdenes / tiempo total de operación en horas
+   */
+  private calculateLambda(): number {
+  const data = this.tableData();
+  if (data.length === 0) return 0;
+
+  const simulationId = this.selectedSimulationId();
+
+  if (!simulationId) {
+    console.error('No hay simulación seleccionada');
+    return 0;
+  }
+
+  const simulation = this.simulations().find(
+    sim => sim.idSimulacion === simulationId
+  );
+
+  if (!simulation || !simulation.horas || simulation.horas <= 0) {
+    console.error('No hay horas válidas para la simulación');
+    return 0;
+  }
+
+  // Detectar jornadas:
+  // Cada no_orden = 1 inicia un nuevo día
+  const totalDays = data.filter(row => Number(row['no_orden']) === 1).length;
+
+  if (totalDays === 0) {
+    console.error('No se detectaron jornadas');
+    return 0;
+  }
+
+  // Horas por jornada
+  const hoursPerDay = simulation.horas / totalDays;
+
+  // Agrupar clientes por jornada
+  const dailyCounts: number[] = [];
+  let currentDayCount = 0;
+
+  data.forEach((row, index) => {
+    const noOrden = Number(row['no_orden']);
+
+    // Nuevo día (excepto primera fila)
+    if (noOrden === 1 && index !== 0) {
+      dailyCounts.push(currentDayCount);
+      currentDayCount = 0;
+    }
+
+    currentDayCount++;
+  });
+
+  // Último día
+  if (currentDayCount > 0) {
+    dailyCounts.push(currentDayCount);
+  }
+
+  if (dailyCounts.length === 0) return 0;
+
+  // λ por día (clientes/hora)
+  const dailyLambdas = dailyCounts.map(
+    clients => clients / hoursPerDay
+  );
+
+  // Promedio final
+  const lambda =
+    dailyLambdas.reduce((sum, val) => sum + val, 0) / dailyLambdas.length;
+
+  console.log('Clientes por jornada:', dailyCounts);
+  console.log('Lambdas diarios:', dailyLambdas.map(l => l.toFixed(2)));
+  console.log(`Lambda promedio final: ${lambda.toFixed(2)} clientes/hora`);
+
+  return lambda;
+}
+
+  /**
+   * Calcula miu (μ) - tasa de servicio
+   * μ = capacidad de servicio = 3600 segundos / promedio de tiempo de servicio
+   */
+  private calculateMiu(): number {
+  const data = this.tableData();
+  if (data.length === 0) return 0;
+
+  let totalServiceTime = 0;
+  let serviceCount = 0;
+
+  data.forEach(row => {
+    const atendida = this.timeToSeconds(row['atendida']);
+    const salida = this.timeToSeconds(row['salida']);
+
+    if (salida > atendida) {
+      const serviceTime = salida - atendida;
+      totalServiceTime += serviceTime;
+      serviceCount++;
+    }
+  });
+
+  if (serviceCount === 0 || totalServiceTime === 0) return 0;
+
+  const avgServiceTime = totalServiceTime / serviceCount;
+
+  const miu = 3600 / avgServiceTime;
+
+  console.log(`Miu calculada: ${miu.toFixed(2)} clientes/hora`);
+  return miu;
+}
+
+  sendToColas(): void {
+    const lambda = this.calculateLambda();
+    const miu = this.calculateMiu();
+
+    if (lambda <= 0 || miu <= 0) {
+      console.error('No se pudieron calcular lambda o miu');
+      alert('No se pudieron calcular lambda o miu. Verifica que los datos de tiempo sean válidos (formato HH:MM:SS)');
+      return;
+    }
+
+    // Guardar valores calculados para edición
+    this.calculatedLambda.set(lambda);
+    this.calculatedMiu.set(miu);
+
+    // Mostrar diálogo para confirmar o editar valores
+    this.showColaDialog.set(true);
+
+    console.log('Valores calculados:', {
+      lambda: lambda.toFixed(2),
+      miu: miu.toFixed(2)
+    });
+  }
+
+  confirmColaData(): void {
+    const lambda = this.calculatedLambda();
+    const miu = this.calculatedMiu();
+
+    // Validar que λ < μ
+    if (lambda >= miu) {
+      alert(`Sistema inestable: λ (${lambda.toFixed(2)}) debe ser menor que μ (${miu.toFixed(2)})`);
+      return;
+    }
+
+    this.fileDataService.setFileData({
+      lambda,
+      miu,
+      distributionType: 'cola'
+    });
+
+    console.log('Datos confirmados y enviados a Colas:', {
+      lambda: lambda.toFixed(2),
+      miu: miu.toFixed(2)
+    });
+
+    this.showColaDialog.set(false);
+    this.router.navigate(['/discretos/colas']);
+  }
+
+  cancelColaDialog(): void {
+    this.showColaDialog.set(false);
   }
 }

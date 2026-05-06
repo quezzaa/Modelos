@@ -2,12 +2,17 @@ import { Injectable } from '@angular/core';
 import { signal } from '@angular/core';
 
 export interface ProcessedFileData {
+  // Datos para Binomial/Hipergeométrica
   N?: number; // Número de filas (sample size)
   n?:number;
   K?: number; // Número de éxitos en la población
   p?: number; // Probabilidad calculada (p = K/N)
-  distributionType: 'binomial' | 'hipergeometrica'; // Tipo de distribución
+  distributionType?: 'binomial' | 'hipergeometrica' | 'cola'; // Tipo de distribución
   selectedKState?: string; // Estado seleccionado de K
+  
+  // Datos para Colas
+  lambda?: number; // Tasa de llegada (λ)
+  miu?: number; // Tasa de servicio (μ)
 }
 
 @Injectable({

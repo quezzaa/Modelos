@@ -41,13 +41,24 @@ interface ColaEstadisticos {
   styleUrl: './colas.css',
 })
 
-export class Colas {
+export class Colas implements OnInit {
   lambda: number = 0;
   miu: number = 0;
   n: number = 0;
 
   dataSource: ColaEstadisticos[] = [];
   private cdr = inject(ChangeDetectorRef);
+  private fileDataService = inject(FileDataService);
+
+  ngOnInit(): void {
+    // Cargar datos desde FileDataService si disponibles
+    const fileData = this.fileDataService.getFileData();
+    if (fileData && fileData.distributionType === 'cola') {
+      this.lambda = fileData.lambda || 0;
+      this.miu = fileData.miu || 0;
+      console.log('Datos cargados desde archivo:', { lambda: this.lambda, miu: this.miu });
+    }
+  }
   // ---------- Gráfica de Distribución Pn (n=0 a 10) ----------
   pnChartData: ChartConfiguration<'bar'>['data'] = {
     labels: [],

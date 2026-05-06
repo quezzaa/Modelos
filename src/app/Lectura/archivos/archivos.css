@@ -8,6 +8,13 @@ mat-card{
     background-color: #c4dded;
 }
 
+table{
+    width: 100%;
+    border-collapse: collapse;
+    height: 300px;
+    overflow-y: scroll;
+}
+
 .button-container {
     display: flex;
     gap: 10px;
@@ -90,4 +97,40 @@ mat-card{
     margin-top: 0;
     color: #333;
     font-size: 16px;
+}
+
+.button-group {
+    display: flex;
+    gap: 15px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+.button-group button {
+    flex: 1;
+    min-width: 200px;
+}
+
+.cola-dialog {
+    background-color: #e3f2fd;
+    margin-top: 30px;
+    border-left: 4px solid #1976d2;
+    padding: 20px;
+}
+
+.cola-dialog h2 {
+    color: #1976d2;
+    margin-top: 0;
+    font-size: 18px;
+}
+
+.cola-params {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.cola-params mat-form-field {
+    width: 100%;
+    max-width: 300px;
 }

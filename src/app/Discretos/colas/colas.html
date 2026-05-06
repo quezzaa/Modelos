@@ -41,7 +41,8 @@
             <strong>Lq (Número promedio de clientes en la cola): </strong> {{ dataSource[0].Lq | number:'1.4-4' }}<br>
         </p>
         <p>
-            <strong>Ls (Número promedio de clientes en el sistema): </strong> {{ dataSource[0].Ls | number:'1.4-4' }}<br>
+            <strong>Ls (Número promedio de clientes en el sistema): </strong> {{ dataSource[0].Ls | number:'1.4-4'
+            }}<br>
         </p>
         <p>
             <strong>Wq (Tiempo promedio en cola): </strong> {{ dataSource[0].Wq | number:'1.4-4' }}<br>
@@ -53,11 +54,16 @@
             <strong>ρ (Utilización): </strong> {{ dataSource[0].ps | number:'1.4-4' }}<br>
         </p>
         <p>
-            <strong>P0 (Probabilidad de que no haya clientes en el sistema): </strong> {{ dataSource[0].P0 | number:'1.4-4' }}<br>
+            <strong>P0 (Probabilidad de que no haya clientes en el sistema): </strong> {{ dataSource[0].P0 |
+            number:'1.4-4' }}<br>
         </p>
+        @if(n!=0){
         <p>
-            <strong>P(n={{ n }}) (Probabilidad de que haya n clientes en el sistema): </strong> {{ dataSource[0].Pn | number:'1.4-4' }}<br>
+            <strong>P(n={{ n }}) (Probabilidad de que haya n clientes en el sistema): </strong> {{ dataSource[0].Pn |
+            number:'1.4-4' }}<br>
         </p>
+        }
+
     </mat-card>
     <br>
 
@@ -66,11 +72,7 @@
     <mat-card *ngIf="dataSource.length > 0">
         <mat-card-title>Gráfica 1: Distribución de Probabilidades P(n)</mat-card-title>
         <p><small>Probabilidad de tener n clientes en el sistema (n = 0 a 10)</small></p>
-        <canvas
-            baseChart
-            [data]="pnChartData"
-            [options]="pnChartOptions"
-            type="bar">
+        <canvas baseChart [data]="pnChartData" [options]="pnChartOptions" type="bar">
         </canvas>
     </mat-card>
 
@@ -80,11 +82,7 @@
     <mat-card *ngIf="dataSource.length > 0">
         <mat-card-title>Gráfica 2: Comparación Lq vs Ls</mat-card-title>
         <p><small>Número promedio de clientes en la cola (Lq) vs en el sistema (Ls)</small></p>
-        <canvas
-            baseChart
-            [data]="lsLqChartData"
-            [options]="lsLqChartOptions"
-            type="bar">
+        <canvas baseChart [data]="lsLqChartData" [options]="lsLqChartOptions" type="bar">
         </canvas>
     </mat-card>
     <br>
